@@ -1,0 +1,20 @@
+{
+  "name": "arkflow",
+  "version": "0.1.0",
+  "description": "A static taint analysis framework for HarmonyOS applications, built on ArkAnalyzer.",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "arkanalyzer": "arkanalyzer"
+  },
+  "dependencies": {
+    "arkanalyzer": "1.0.90"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
+  }
+}
