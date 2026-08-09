@@ -1,0 +1,736 @@
+{
+  "schemaVersion": 2,
+  "defectKind": "null-dereference",
+  "cases": [
+    {
+      "id": "BasicNull.DirectNull",
+      "category": ["BasicNull"],
+      "features": ["null-literal", "non-null-assertion", "flow-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "BasicNull.UndefinedNull",
+      "category": ["BasicNull"],
+      "features": ["undefined-aware", "non-null-assertion", "flow-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "BasicNull.NullableParameter",
+      "category": ["BasicNull"],
+      "features": ["nullable-aware", "non-null-assertion", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "useAccount" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "useAccount" }
+        ]
+      }
+    },
+    {
+      "id": "BasicNull.OptionalProperty",
+      "category": ["BasicNull"],
+      "features": ["undefined-aware", "optional-property", "non-null-assertion", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "SessionStore", "method": "constructor" },
+        "dereference": { "class": "SessionStore", "method": "refreshCurrent" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "SessionStore", "method": "constructor" },
+          { "class": "SessionStore", "method": "refreshCurrent" }
+        ]
+      }
+    },
+    {
+      "id": "BasicNull.NullishCoalescing",
+      "category": ["BasicNull"],
+      "features": ["nullish-coalescing", "safe-fallback"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "BasicNull.NullishCoalescingNullishFallback",
+      "category": ["BasicNull"],
+      "features": ["nullish-coalescing", "undefined-aware", "nullable-fallback", "non-null-assertion"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "BasicNull.OptionalChain",
+      "category": ["BasicNull"],
+      "features": ["optional-chain", "long-chain", "short-circuit"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "loadPerson" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "loadPerson" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.ReturnPropagation",
+      "category": ["DataFlowPropagation"],
+      "features": ["undefined-aware", "return-aware", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "<global>", "method": "findProfile" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "<global>", "method": "findProfile" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.ParameterPropagation",
+      "category": ["DataFlowPropagation"],
+      "features": ["parameter-aware", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "consume" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "forward" },
+          { "class": "EntryAbility", "method": "consume" }
+        ]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.FieldPropagation",
+      "category": ["DataFlowPropagation"],
+      "features": ["field-sensitive", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "clearAccount" },
+        "dereference": { "class": "EntryAbility", "method": "readBalance" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "clearAccount" },
+          { "class": "EntryAbility", "method": "readBalance" }
+        ]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.AliasPropagation",
+      "category": ["DataFlowPropagation"],
+      "features": ["alias-aware", "flow-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.CollectionPropagation",
+      "category": ["DataFlowPropagation"],
+      "features": ["collection-aware", "library-summary", "undefined-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "PathSensitivity.GuardedAccess",
+      "category": ["PathSensitivity"],
+      "features": ["path-sensitive", "branch-refinement"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "loadAccount" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "loadAccount" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "PathSensitivity.BranchMerge",
+      "category": ["PathSensitivity"],
+      "features": ["path-sensitive", "branch-merge"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "selectAccount" },
+        "dereference": { "class": "EntryAbility", "method": "selectAccount" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "selectAccount" }
+        ]
+      }
+    },
+    {
+      "id": "PathSensitivity.StrongUpdate",
+      "category": ["PathSensitivity"],
+      "features": ["flow-sensitive", "strong-update"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "PathSensitivity.LoopPropagation",
+      "category": ["PathSensitivity"],
+      "features": ["loop-aware", "fixpoint"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "PathSensitivity.ExceptionPath",
+      "category": ["PathSensitivity"],
+      "features": ["exception-aware", "path-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "Lifecycle.Ability.InitBeforeUse",
+      "category": ["Lifecycle", "Ability"],
+      "features": ["lifecycle-aware", "field-sensitive"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "<field-initializer>" },
+        "dereference": { "class": "EntryAbility", "method": "onForeground" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "onForeground" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Ability.ClearBeforeUse",
+      "category": ["Lifecycle", "Ability"],
+      "features": ["lifecycle-aware", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onBackground" },
+        "dereference": { "class": "EntryAbility", "method": "onDestroy" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "onBackground" },
+          { "class": "EntryAbility", "method": "onDestroy" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Ability.ReentryLifecycle",
+      "category": ["Lifecycle", "Ability"],
+      "features": ["lifecycle-aware", "lifecycle-reentry", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onBackground" },
+        "dereference": { "class": "EntryAbility", "method": "onForeground" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "onForeground" },
+          { "class": "EntryAbility", "method": "onBackground" },
+          { "class": "EntryAbility", "method": "onForeground" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Component.AboutAppearDisappear",
+      "category": ["Lifecycle", "Component"],
+      "features": ["lifecycle-aware", "field-sensitive"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "Index", "method": "<field-initializer>" },
+        "dereference": { "class": "Index", "method": "aboutToDisappear" },
+        "executionPath": [
+          { "class": "Index", "method": "aboutToAppear" },
+          { "class": "Index", "method": "aboutToDisappear" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Component.StateReset",
+      "category": ["Lifecycle", "Component"],
+      "features": ["lifecycle-aware", "field-sensitive", "callback-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "Index", "method": "onClick" },
+        "dereference": { "class": "Index", "method": "aboutToDisappear" },
+        "executionPath": [
+          { "class": "Index", "method": "aboutToAppear" },
+          { "class": "Index", "method": "onClick" },
+          { "class": "Index", "method": "aboutToDisappear" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Component.ComponentReuse",
+      "category": ["Lifecycle", "Component"],
+      "features": ["lifecycle-aware", "component-reuse", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "ReusableCard", "method": "aboutToRecycle" },
+        "dereference": { "class": "ReusableCard", "method": "aboutToReuse" },
+        "executionPath": [
+          { "class": "ReusableCard", "method": "aboutToRecycle" },
+          { "class": "ReusableCard", "method": "aboutToReuse" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Page.PageReuse",
+      "category": ["Lifecycle", "Page"],
+      "features": ["lifecycle-aware", "lifecycle-reentry", "field-sensitive", "callback-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "Index", "method": "onPageHide" },
+        "dereference": { "class": "Index", "method": "onPageShow" },
+        "executionPath": [
+          { "class": "Index", "method": "onPageShow" },
+          { "class": "Index", "method": "onClick" },
+          { "class": "Index", "method": "onPageHide" },
+          { "class": "Index", "method": "onClick" },
+          { "class": "Index", "method": "onPageShow" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Page.NavigationBack",
+      "category": ["Lifecycle", "Page"],
+      "features": ["lifecycle-aware", "field-sensitive", "callback-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "Index", "method": "onClick" },
+        "dereference": { "class": "Index", "method": "onPageHide" },
+        "executionPath": [
+          { "class": "Index", "method": "onClick" },
+          { "class": "Index", "method": "onPageHide" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.TimerCallback",
+      "category": ["Callback"],
+      "features": ["callback-aware", "timer-aware", "closure-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "setTimeout" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "setTimeout" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.EventListener",
+      "category": ["Callback"],
+      "features": ["callback-aware", "closure-aware", "event-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "on" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EventSource", "method": "on" },
+          { "class": "EventSource", "method": "emit" },
+          { "class": "EntryAbility", "method": "on" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.Closure1",
+      "category": ["Callback"],
+      "features": ["closure-aware", "nested-function", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "<global>", "method": "loadAccount" },
+        "dereference": { "class": "<global>", "method": "inFunction" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "<global>", "method": "outFunction" },
+          { "class": "<global>", "method": "loadAccount" },
+          { "class": "<global>", "method": "inFunction" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.Closure2",
+      "category": ["Callback"],
+      "features": ["closure-aware", "nested-function", "multi-level-closure", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "<global>", "method": "loadAccount" },
+        "dereference": { "class": "<global>", "method": "inFunction2" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "<global>", "method": "outFunction" },
+          { "class": "<global>", "method": "loadAccount" },
+          { "class": "<global>", "method": "inFunction1" },
+          { "class": "<global>", "method": "inFunction2" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.UIEventCallback",
+      "category": ["Callback"],
+      "features": ["callback-aware", "ui-event-aware", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "Index", "method": "<field-initializer>" },
+        "dereference": { "class": "Index", "method": "onClick" },
+        "executionPath": [
+          { "class": "Index", "method": "build" },
+          { "class": "Index", "method": "onClick" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.PromiseCallback",
+      "category": ["Callback"],
+      "features": ["callback-aware", "promise-aware", "timer-aware", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "then" },
+        "dereference": { "class": "EntryAbility", "method": "useAccount" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "then" },
+          { "class": "EntryAbility", "method": "setTimeout" },
+          { "class": "EntryAbility", "method": "useAccount" }
+        ]
+      }
+    },
+    {
+      "id": "Async.AsyncAwait",
+      "category": ["Async"],
+      "features": ["async-aware", "return-aware", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "<global>", "method": "loadAccount" },
+        "dereference": { "class": "EntryAbility", "method": "run" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "run" },
+          { "class": "<global>", "method": "loadAccount" },
+          { "class": "EntryAbility", "method": "run" }
+        ]
+      }
+    },
+    {
+      "id": "Async.PromiseChain",
+      "category": ["Async"],
+      "features": ["async-aware", "promise-aware", "callback-aware"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "then" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "then" },
+          { "class": "EntryAbility", "method": "then" }
+        ]
+      }
+    },
+    {
+      "id": "Async.DelayedExecution",
+      "category": ["Async"],
+      "features": ["async-aware", "timer-aware", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "setTimeout" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "setTimeout" }
+        ]
+      }
+    },
+    {
+      "id": "PathSensitivity.SafeNullCheck",
+      "category": ["PathSensitivity"],
+      "features": ["path-sensitive", "branch-refinement"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "findAccount" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "findAccount" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Ability.LifecycleSafe",
+      "category": ["Lifecycle", "Ability"],
+      "features": ["lifecycle-aware", "field-sensitive"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "<field-initializer>" },
+        "dereference": { "class": "EntryAbility", "method": "onDestroy" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "onDestroy" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.CallbackRemoved",
+      "category": ["Callback"],
+      "features": ["callback-aware", "callback-removal", "event-aware"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EventSource", "method": "on" },
+          { "class": "EventSource", "method": "off" },
+          { "class": "EventSource", "method": "emit" }
+        ]
+      }
+    },
+    {
+      "id": "PathSensitivity.ReinitializedObject",
+      "category": ["PathSensitivity"],
+      "features": ["flow-sensitive", "strong-update"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.ArrayElementPropagation",
+      "category": ["DataFlowPropagation"],
+      "features": ["array-aware", "element-sensitive", "flow-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.ObjectSensitivity",
+      "category": ["DataFlowPropagation"],
+      "features": ["object-sensitive", "field-sensitive", "negative-case"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "Holder", "method": "constructor" },
+        "dereference": { "class": "Holder", "method": "use" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "Holder", "method": "constructor" },
+          { "class": "Holder", "method": "use" }
+        ]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.VirtualDispatch",
+      "category": ["DataFlowPropagation"],
+      "features": ["virtual-dispatch", "return-aware", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EmptyProvider", "method": "load" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EmptyProvider", "method": "load" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "DataFlowPropagation.InheritedField",
+      "category": ["DataFlowPropagation"],
+      "features": ["inheritance-aware", "field-sensitive", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "BaseStore", "method": "clear" },
+        "dereference": { "class": "DerivedStore", "method": "use" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "BaseStore", "method": "clear" },
+          { "class": "DerivedStore", "method": "use" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Ability.NewWantShare",
+      "category": ["Lifecycle", "Ability"],
+      "features": ["lifecycle-aware", "new-want", "share-callback", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onNewWant" },
+        "dereference": { "class": "EntryAbility", "method": "onShare" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onNewWant" },
+          { "class": "EntryAbility", "method": "onShare" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Ability.DestroyDoesNotReachCreate",
+      "category": ["Lifecycle", "Ability"],
+      "features": ["lifecycle-aware", "event-ordering", "negative-case"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "onDestroy" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "onDestroy" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.WindowStage.CreateWillDestroy",
+      "category": ["Lifecycle", "WindowStage"],
+      "features": ["lifecycle-aware", "window-stage", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onWindowStageCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onWindowStageWillDestroy" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onWindowStageCreate" },
+          { "class": "EntryAbility", "method": "onWindowStageWillDestroy" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.WindowStage.InitializedBeforeDestroy",
+      "category": ["Lifecycle", "WindowStage"],
+      "features": ["lifecycle-aware", "window-stage", "strong-update", "negative-case"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "<field-initializer>" },
+        "dereference": { "class": "EntryAbility", "method": "onWindowStageWillDestroy" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onWindowStageCreate" },
+          { "class": "EntryAbility", "method": "onWindowStageWillDestroy" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Inheritance.BaseCreateDerivedDestroy",
+      "category": ["Lifecycle", "Inheritance"],
+      "features": ["lifecycle-aware", "inheritance-aware", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "BaseAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onDestroy" },
+        "executionPath": [
+          { "class": "BaseAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "onDestroy" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Extension.BackupRestore",
+      "category": ["Lifecycle", "Extension"],
+      "features": ["lifecycle-aware", "backup-extension", "async-aware", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryBackupAbility", "method": "onBackup" },
+        "dereference": { "class": "EntryBackupAbility", "method": "onRestore" },
+        "executionPath": [
+          { "class": "EntryBackupAbility", "method": "onBackup" },
+          { "class": "EntryBackupAbility", "method": "onRestore" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.Extension.FormUpdate",
+      "category": ["Lifecycle", "Extension"],
+      "features": ["lifecycle-aware", "form-extension", "field-sensitive"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryFormAbility", "method": "onAddForm" },
+        "dereference": { "class": "EntryFormAbility", "method": "onUpdateForm" },
+        "executionPath": [
+          { "class": "EntryFormAbility", "method": "onAddForm" },
+          { "class": "EntryFormAbility", "method": "onUpdateForm" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.CrossComponent.AbilityToPage",
+      "category": ["Lifecycle", "CrossComponent"],
+      "features": ["lifecycle-aware", "cross-component", "static-field", "window-stage"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onWindowStageCreate" },
+        "dereference": { "class": "Index", "method": "aboutToAppear" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onWindowStageCreate" },
+          { "class": "Index", "method": "aboutToAppear" }
+        ]
+      }
+    },
+    {
+      "id": "Lifecycle.CrossComponent.PageEventToBackground",
+      "category": ["Lifecycle", "CrossComponent"],
+      "features": ["lifecycle-aware", "cross-component", "ui-event-aware", "static-field"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "Index", "method": "onClick" },
+        "dereference": { "class": "EntryAbility", "method": "onBackground" },
+        "executionPath": [
+          { "class": "Index", "method": "build" },
+          { "class": "Index", "method": "onClick" },
+          { "class": "EntryAbility", "method": "onBackground" }
+        ]
+      }
+    },
+    {
+      "id": "Callback.OrderedUIEvents",
+      "category": ["Callback"],
+      "features": ["callback-aware", "ui-event-aware", "event-ordering", "interprocedural"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "Index", "method": "clearController" },
+        "dereference": { "class": "Index", "method": "useController" },
+        "executionPath": [
+          { "class": "Index", "method": "build" },
+          { "class": "Index", "method": "onClick" },
+          { "class": "Index", "method": "clearController" },
+          { "class": "Index", "method": "onClick" },
+          { "class": "Index", "method": "useController" }
+        ]
+      }
+    }
+  ]
+}

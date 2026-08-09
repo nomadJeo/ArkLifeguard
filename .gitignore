@@ -3,4 +3,5 @@ dist/
 out/
 coverage/
 *.log
+/docs
 

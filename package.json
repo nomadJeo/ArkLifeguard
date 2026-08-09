@@ -1,5 +1,5 @@
 {
-  "name": "arkflow",
+  "name": "arkLifeguard",
   "version": "0.1.0",
   "description": "A static taint analysis framework for HarmonyOS applications, built on ArkAnalyzer.",
   "private": true,
