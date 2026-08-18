@@ -41,7 +41,12 @@
     {
       "id": "BasicNull.OptionalProperty",
       "category": ["BasicNull"],
-      "features": ["undefined-aware", "optional-property", "non-null-assertion", "interprocedural"],
+      "features": [
+        "undefined-aware",
+        "optional-property",
+        "non-null-assertion",
+        "interprocedural"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "SessionStore", "method": "constructor" },
@@ -67,7 +72,12 @@
     {
       "id": "BasicNull.NullishCoalescingNullishFallback",
       "category": ["BasicNull"],
-      "features": ["nullish-coalescing", "undefined-aware", "nullable-fallback", "non-null-assertion"],
+      "features": [
+        "nullish-coalescing",
+        "undefined-aware",
+        "nullable-fallback",
+        "non-null-assertion"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
@@ -225,7 +235,10 @@
       "features": ["lifecycle-aware", "field-sensitive"],
       "expected": {
         "bug": false,
-        "nullOrigin": { "class": "EntryAbility", "method": "<field-initializer>" },
+        "nullOrigin": {
+          "class": "EntryAbility",
+          "method": "<field-initializer>"
+        },
         "dereference": { "class": "EntryAbility", "method": "onForeground" },
         "executionPath": [
           { "class": "EntryAbility", "method": "onCreate" },
@@ -308,19 +321,45 @@
       }
     },
     {
-      "id": "Lifecycle.Page.PageReuse",
+      "id": "Lifecycle.Page.HideShow",
       "category": ["Lifecycle", "Page"],
-      "features": ["lifecycle-aware", "lifecycle-reentry", "field-sensitive", "callback-aware"],
+      "features": [
+        "lifecycle-aware",
+        "lifecycle-reentry",
+        "field-sensitive",
+        "callback-aware"
+      ],
       "expected": {
         "bug": true,
-        "nullOrigin": { "class": "Index", "method": "onPageHide" },
-        "dereference": { "class": "Index", "method": "onPageShow" },
+        "nullOrigin": {
+          "class": "Index",
+          "method": "onPageHide"
+        },
+        "dereference": {
+          "class": "Index",
+          "method": "onPageShow"
+        },
         "executionPath": [
-          { "class": "Index", "method": "onPageShow" },
-          { "class": "Index", "method": "onClick" },
-          { "class": "Index", "method": "onPageHide" },
-          { "class": "Index", "method": "onClick" },
-          { "class": "Index", "method": "onPageShow" }
+          {
+            "class": "Index",
+            "method": "onPageShow"
+          },
+          {
+            "class": "Index",
+            "method": "onClick"
+          },
+          {
+            "class": "Index",
+            "method": "onPageHide"
+          },
+          {
+            "class": "Detail",
+            "method": "onClick"
+          },
+          {
+            "class": "Index",
+            "method": "onPageShow"
+          }
         ]
       }
     },
@@ -387,7 +426,12 @@
     {
       "id": "Callback.Closure2",
       "category": ["Callback"],
-      "features": ["closure-aware", "nested-function", "multi-level-closure", "interprocedural"],
+      "features": [
+        "closure-aware",
+        "nested-function",
+        "multi-level-closure",
+        "interprocedural"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "<global>", "method": "loadAccount" },
@@ -418,7 +462,12 @@
     {
       "id": "Callback.PromiseCallback",
       "category": ["Callback"],
-      "features": ["callback-aware", "promise-aware", "timer-aware", "field-sensitive"],
+      "features": [
+        "callback-aware",
+        "promise-aware",
+        "timer-aware",
+        "field-sensitive"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "EntryAbility", "method": "then" },
@@ -497,7 +546,10 @@
       "features": ["lifecycle-aware", "field-sensitive"],
       "expected": {
         "bug": false,
-        "nullOrigin": { "class": "EntryAbility", "method": "<field-initializer>" },
+        "nullOrigin": {
+          "class": "EntryAbility",
+          "method": "<field-initializer>"
+        },
         "dereference": { "class": "EntryAbility", "method": "onDestroy" },
         "executionPath": [
           { "class": "EntryAbility", "method": "onCreate" },
@@ -591,7 +643,12 @@
     {
       "id": "Lifecycle.Ability.NewWantShare",
       "category": ["Lifecycle", "Ability"],
-      "features": ["lifecycle-aware", "new-want", "share-callback", "field-sensitive"],
+      "features": [
+        "lifecycle-aware",
+        "new-want",
+        "share-callback",
+        "field-sensitive"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "EntryAbility", "method": "onNewWant" },
@@ -622,8 +679,14 @@
       "features": ["lifecycle-aware", "window-stage", "field-sensitive"],
       "expected": {
         "bug": true,
-        "nullOrigin": { "class": "EntryAbility", "method": "onWindowStageCreate" },
-        "dereference": { "class": "EntryAbility", "method": "onWindowStageWillDestroy" },
+        "nullOrigin": {
+          "class": "EntryAbility",
+          "method": "onWindowStageCreate"
+        },
+        "dereference": {
+          "class": "EntryAbility",
+          "method": "onWindowStageWillDestroy"
+        },
         "executionPath": [
           { "class": "EntryAbility", "method": "onWindowStageCreate" },
           { "class": "EntryAbility", "method": "onWindowStageWillDestroy" }
@@ -633,11 +696,22 @@
     {
       "id": "Lifecycle.WindowStage.InitializedBeforeDestroy",
       "category": ["Lifecycle", "WindowStage"],
-      "features": ["lifecycle-aware", "window-stage", "strong-update", "negative-case"],
+      "features": [
+        "lifecycle-aware",
+        "window-stage",
+        "strong-update",
+        "negative-case"
+      ],
       "expected": {
         "bug": false,
-        "nullOrigin": { "class": "EntryAbility", "method": "<field-initializer>" },
-        "dereference": { "class": "EntryAbility", "method": "onWindowStageWillDestroy" },
+        "nullOrigin": {
+          "class": "EntryAbility",
+          "method": "<field-initializer>"
+        },
+        "dereference": {
+          "class": "EntryAbility",
+          "method": "onWindowStageWillDestroy"
+        },
         "executionPath": [
           { "class": "EntryAbility", "method": "onWindowStageCreate" },
           { "class": "EntryAbility", "method": "onWindowStageWillDestroy" }
@@ -661,7 +735,12 @@
     {
       "id": "Lifecycle.Extension.BackupRestore",
       "category": ["Lifecycle", "Extension"],
-      "features": ["lifecycle-aware", "backup-extension", "async-aware", "field-sensitive"],
+      "features": [
+        "lifecycle-aware",
+        "backup-extension",
+        "async-aware",
+        "field-sensitive"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "EntryBackupAbility", "method": "onBackup" },
@@ -679,7 +758,10 @@
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "EntryFormAbility", "method": "onAddForm" },
-        "dereference": { "class": "EntryFormAbility", "method": "onUpdateForm" },
+        "dereference": {
+          "class": "EntryFormAbility",
+          "method": "onUpdateForm"
+        },
         "executionPath": [
           { "class": "EntryFormAbility", "method": "onAddForm" },
           { "class": "EntryFormAbility", "method": "onUpdateForm" }
@@ -689,10 +771,18 @@
     {
       "id": "Lifecycle.CrossComponent.AbilityToPage",
       "category": ["Lifecycle", "CrossComponent"],
-      "features": ["lifecycle-aware", "cross-component", "static-field", "window-stage"],
+      "features": [
+        "lifecycle-aware",
+        "cross-component",
+        "static-field",
+        "window-stage"
+      ],
       "expected": {
         "bug": true,
-        "nullOrigin": { "class": "EntryAbility", "method": "onWindowStageCreate" },
+        "nullOrigin": {
+          "class": "EntryAbility",
+          "method": "onWindowStageCreate"
+        },
         "dereference": { "class": "Index", "method": "aboutToAppear" },
         "executionPath": [
           { "class": "EntryAbility", "method": "onWindowStageCreate" },
@@ -703,7 +793,12 @@
     {
       "id": "Lifecycle.CrossComponent.PageEventToBackground",
       "category": ["Lifecycle", "CrossComponent"],
-      "features": ["lifecycle-aware", "cross-component", "ui-event-aware", "static-field"],
+      "features": [
+        "lifecycle-aware",
+        "cross-component",
+        "ui-event-aware",
+        "static-field"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "Index", "method": "onClick" },
@@ -718,7 +813,12 @@
     {
       "id": "Callback.OrderedUIEvents",
       "category": ["Callback"],
-      "features": ["callback-aware", "ui-event-aware", "event-ordering", "interprocedural"],
+      "features": [
+        "callback-aware",
+        "ui-event-aware",
+        "event-ordering",
+        "interprocedural"
+      ],
       "expected": {
         "bug": true,
         "nullOrigin": { "class": "Index", "method": "clearController" },

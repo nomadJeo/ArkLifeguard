@@ -1,3 +1,5 @@
+// pages/Index.ets
+
 import { router } from '@kit.ArkUI';
 
 class PageResource {
@@ -20,13 +22,9 @@ struct Index {
 
   build() {
     Column() {
-      Button('open another page instance')
+      Button('open detail')
         .onClick(() => {
-          router.pushUrl({ url: 'pages/Index' });
-        });
-      Button('return to previous page instance')
-        .onClick(() => {
-          router.back();
+          router.pushUrl({ url: 'pages/Detail' });
         });
     }
   }
