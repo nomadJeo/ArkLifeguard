@@ -8,13 +8,16 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "arkanalyzer": "arkanalyzer"
+    "arkanalyzer": "arkanalyzer",
+    "inspect:project-ir": "vite-node scripts/inspect-project-ir.ts",
+    "inspect:dummymain": "vite-node scripts/inspect-dummymain.ts"
   },
   "dependencies": {
     "arkanalyzer": "1.0.90"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite-node": "^3.2.4"
   }
 }

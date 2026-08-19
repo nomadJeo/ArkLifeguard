@@ -5,4 +5,5 @@ coverage/
 *.log
 /docs
 Demo4tests/
+sdk/
 
