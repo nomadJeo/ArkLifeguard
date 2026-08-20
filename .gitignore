@@ -4,6 +4,6 @@ out/
 coverage/
 *.log
 /docs
-Demo4tests/
 sdk/
+HarmonyRealApps/projects/
 

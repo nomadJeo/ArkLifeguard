@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "arkanalyzer": "arkanalyzer",
     "inspect:project-ir": "vite-node scripts/inspect-project-ir.ts",
-    "inspect:dummymain": "vite-node scripts/inspect-dummymain.ts"
+    "inspect:dummymain": "vite-node scripts/inspect-dummymain.ts",
+    "sync:real-apps": "vite-node scripts/sync-harmony-real-apps.ts"
   },
   "dependencies": {
     "arkanalyzer": "1.0.90"

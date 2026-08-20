@@ -1,0 +1,484 @@
+{
+  "projects": [
+    {
+      "name": "account_app_harmonyos",
+      "path": "projects/account_app_harmonyos",
+      "repo": "https://github.com/banggx/account_app_harmonyos.git",
+      "revision": "master",
+      "resolvedCommit": "b27fde235566e8d1ba312c6527eb76c23413747e",
+      "compileSdkVersion": 9,
+      "compatibleSdkVersion": 9,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "Accouting_ArkTS",
+      "path": "projects/Accouting_ArkTS",
+      "repo": "https://github.com/YShelter/Accouting_ArkTS.git",
+      "revision": "master",
+      "resolvedCommit": "8c663c85f2c11738d4eabf269c23dc1ec84eb013",
+      "compileSdkVersion": 9,
+      "compatibleSdkVersion": 9,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "Aigis",
+      "path": "projects/Aigis",
+      "repo": "https://github.com/iamhyc/Aigis.git",
+      "revision": "master",
+      "resolvedCommit": "585de9128882d868484438d32832ca9b9b50442d",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "browser",
+      "path": "projects/browser",
+      "repo": "https://github.com/langwudong/browser.git",
+      "revision": "master",
+      "resolvedCommit": "f44fff759c50c162739c1585149018e6f0277471",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.1.0(18)",
+      "targetSdkVersion": "5.1.0(18)"
+    },
+    {
+      "name": "ccplayer",
+      "path": "projects/ccplayer",
+      "repo": "https://github.com/seagazer/ccplayer.git",
+      "revision": "main",
+      "resolvedCommit": "92a09a15668548588a6198d2dbb559ab3081f4e7",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.2(14)",
+      "targetSdkVersion": "6.1.0(23)"
+    },
+    {
+      "name": "cloud-foundation-kit_-codelab_-arkts",
+      "path": "projects/cloud-foundation-kit_-codelab_-arkts",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/cloud-foundation-kit_-codelab_-arkts.git",
+      "revision": "master",
+      "resolvedCommit": "e303aefba7d9c83b26b266d40be2c580e81627f8",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.5(17)",
+      "targetSdkVersion": "6.1.0(23)"
+    },
+    {
+      "name": "CloudMusic-HarmonyOSNex",
+      "path": "projects/CloudMusic-HarmonyOSNex",
+      "repo": "https://gitcode.com/openharmony-bench/CloudMusic-HarmonyOSNex.git",
+      "revision": "master",
+      "resolvedCommit": "724702c9eb5ae0695651eb995829c0b0c7834e0a",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.4(16)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "ColdStartPerformanceIssue",
+      "path": "projects/ColdStartPerformanceIssue",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/ColdStartPerformanceIssue.git",
+      "revision": "master",
+      "resolvedCommit": "af37f55660eb7991b62075a75af30d9b0b1a09bb",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "CoolMallArkTS",
+      "path": "projects/CoolMallArkTS",
+      "repo": "https://gitcode.com/openharmony-bench/CoolMallArkTS.git",
+      "revision": "main",
+      "resolvedCommit": "17b6899086a57a4d48448842a14f9e325e3e35a3",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "6.0.1(21)",
+      "targetSdkVersion": "6.0.1(21)"
+    },
+    {
+      "name": "DistributedMail",
+      "path": "projects/DistributedMail",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/DistributedMail.git",
+      "revision": "master",
+      "resolvedCommit": "75c9820357055c380c35152fb56ef9cb39a9e8fd",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.5(17)",
+      "targetSdkVersion": "6.0.2(22)"
+    },
+    {
+      "name": "echo",
+      "path": "projects/echo",
+      "repo": "https://github.com/liriliri/echo.git",
+      "revision": "master",
+      "resolvedCommit": "2b1439ff9c97f7ae5e51b26fadac2ff7bfd7512b",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "AnimeZ",
+      "path": "projects/AnimeZ",
+      "repo": "https://github.com/Z-P-J/AnimeZ.git",
+      "revision": "main",
+      "resolvedCommit": "dbeeea6d96c08bce4a88a4f45d3384d829738fa1",
+      "compileSdkVersion": 9,
+      "compatibleSdkVersion": 9,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "ElderMate",
+      "path": "projects/ElderMate",
+      "repo": "https://github.com/iuroc/ElderMate.git",
+      "revision": "main",
+      "resolvedCommit": "da4b4d1f946feb93ec38017e5b323ea84a1964b2",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.1(13)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "ExploreHarmonyNext",
+      "path": "projects/ExploreHarmonyNext",
+      "repo": "https://github.com/JasonYinH/ExploreHarmonyNext.git",
+      "revision": "master",
+      "resolvedCommit": "d1601c8eb95b72d12938c111c6ddcbd343ccd839",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "FinVideo",
+      "path": "projects/FinVideo",
+      "repo": "https://github.com/OHPG/FinVideo.git",
+      "revision": "master",
+      "resolvedCommit": "669916b3581c7d92514f7639232565cd5ac3f775",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.3(15)",
+      "targetSdkVersion": "6.0.0(20)"
+    },
+    {
+      "name": "Gramony",
+      "path": "projects/Gramony",
+      "repo": "https://github.com/Gramony/Gramony.git",
+      "revision": "dev",
+      "resolvedCommit": "0a1ee4b026b6736671f0030ba9859aceaa962298",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.1.0(18)",
+      "targetSdkVersion": "5.1.0(18)"
+    },
+    {
+      "name": "Harflix",
+      "path": "projects/Harflix",
+      "repo": "https://github.com/Actrlq/Harflix.git",
+      "revision": "master",
+      "resolvedCommit": "10a7f6dde740c938307a73dd6363b5ca6a2b825f",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.5(17)",
+      "targetSdkVersion": "5.0.5(17)"
+    },
+    {
+      "name": "HarmoneyOpenEye",
+      "path": "projects/HarmoneyOpenEye",
+      "repo": "https://github.com/WinWang/HarmoneyOpenEye.git",
+      "revision": "master",
+      "resolvedCommit": "57f0542795336009aa0d46fd9fa5b07facc2ae87",
+      "compileSdkVersion": 9,
+      "compatibleSdkVersion": 9,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "harmony-utils",
+      "path": "projects/harmony-utils",
+      "repo": "https://github.com/787107497/harmony-utils.git",
+      "revision": "master",
+      "resolvedCommit": "f8da888faaa30e9ebcd95b85f16184d86a1f02cd",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "HarmonyAtomicService",
+      "path": "projects/HarmonyAtomicService",
+      "repo": "https://github.com/liyufengrex/HarmonyAtomicService.git",
+      "revision": "main",
+      "resolvedCommit": "27d237fb097a7f92e7bead55c16abc65a0e42f88",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "HarmonyKit",
+      "path": "projects/HarmonyKit",
+      "repo": "https://github.com/Joker-x-dev/HarmonyKit.git",
+      "revision": "main",
+      "resolvedCommit": "f97197ce157df7f303244fba42e34918306dfb08",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "6.0.1(21)",
+      "targetSdkVersion": "6.0.1(21)"
+    },
+    {
+      "name": "HarmonyOS-mall",
+      "path": "projects/HarmonyOS-mall",
+      "repo": "https://github.com/jiuxuanzhi/HarmonyOS-mall.git",
+      "revision": "main",
+      "resolvedCommit": "7e49c993066676da90ff6968bc91a83669a523f7",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "HarmonyOS",
+      "path": "projects/HarmonyOS",
+      "repo": "https://github.com/shuhongfan/HarmonyOS.git",
+      "revision": "master",
+      "resolvedCommit": "b2c129923352b69e88f12a0c238254de7cd573e0",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "HarmonyOsRefresh",
+      "path": "projects/HarmonyOsRefresh",
+      "repo": "https://github.com/AbnerMing888/HarmonyOsRefresh.git",
+      "revision": "master",
+      "resolvedCommit": "f07bc89a02d45a9208172435eac3177c0dc00b77",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "HarmonyUtilCode",
+      "path": "projects/HarmonyUtilCode",
+      "repo": "https://github.com/ByteRax/HarmonyUtilCode.git",
+      "revision": "master",
+      "resolvedCommit": "9751d1af45ed7c847e636f760f9c38168f1e479a",
+      "compileSdkVersion": "5.0.0(12)",
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "Homogram",
+      "path": "projects/Homogram",
+      "repo": "https://github.com/HomoArk/Homogram.git",
+      "revision": "dev",
+      "resolvedCommit": "fb9aaaa7209164c96a7ef70dc312515e9cd40774",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.1.0(18)",
+      "targetSdkVersion": "5.1.0(18)"
+    },
+    {
+      "name": "interview-handbook-project-next",
+      "path": "projects/interview-handbook-project-next",
+      "repo": "https://github.com/lpm8224/interview-handbook-project-next.git",
+      "revision": "main",
+      "resolvedCommit": "24b3143aea56b636f6c006d613c19974083cce32",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "JellyFin_HarmonyOS",
+      "path": "projects/JellyFin_HarmonyOS",
+      "repo": "https://github.com/chashaochang/JellyFin_HarmonyOS.git",
+      "revision": "main",
+      "resolvedCommit": "d49c9e850ab55836f46e57af333eb98e71eec119",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.5(17)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "jingmo-for-HarmonyOS",
+      "path": "projects/jingmo-for-HarmonyOS",
+      "repo": "https://github.com/hefengbao/jingmo-for-HarmonyOS.git",
+      "revision": "main",
+      "resolvedCommit": "a208f3fdc95c0914749072e811301b9dfd6678d6",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.1.1(19)",
+      "targetSdkVersion": "6.0.1(21)"
+    },
+    {
+      "name": "KeePassHO",
+      "path": "projects/KeePassHO",
+      "repo": "https://github.com/aimilin6688/KeePassHO.git",
+      "revision": "main",
+      "resolvedCommit": "f4e80a3116d77492f54a382a87e66c3747f018de",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "6.0.0(20)",
+      "targetSdkVersion": "6.0.0(20)"
+    },
+    {
+      "name": "LinysBrowser_NEXT",
+      "path": "projects/LinysBrowser_NEXT",
+      "repo": "https://github.com/awaLiny2333/LinysBrowser_NEXT.git",
+      "revision": "master",
+      "resolvedCommit": "b322dabecb97dae725eba3e8954b083c443c9ace",
+      "compileSdkVersion": 23,
+      "compatibleSdkVersion": "6.1.0(23)",
+      "targetSdkVersion": "6.1.0(23)"
+    },
+    {
+      "name": "mcCharts",
+      "path": "projects/mcCharts",
+      "repo": "https://github.com/Yuan-Mr/mcCharts.git",
+      "revision": "dev",
+      "resolvedCommit": "8dcf1e4d6d7c6e5e603c64435befc7fdad978df8",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "4.1.0(11)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "MiShop_HarmonyOS",
+      "path": "projects/MiShop_HarmonyOS",
+      "repo": "https://github.com/Huarrrr/MiShop_HarmonyOS.git",
+      "revision": "main",
+      "resolvedCommit": "a94d941f50550522c8324416afe4551ed4a2df93",
+      "compileSdkVersion": 9,
+      "compatibleSdkVersion": 9,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "MultiVideoApplication",
+      "path": "projects/MultiVideoApplication",
+      "repo": "https://github.com/anchicken/MultiVideoApplication.git",
+      "revision": "main",
+      "resolvedCommit": "05d4952baa17611070370c24a4a039a09cd92121",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "MusicHome",
+      "path": "projects/MusicHome",
+      "repo": "https://gitcode.com/HarmonyOS_Samples/MusicHome.git",
+      "revision": "master",
+      "resolvedCommit": "7a21f3842fe3741f373fe09ad797b75ae4c486f6",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "6.0.2(22)",
+      "targetSdkVersion": "6.1.0(23)"
+    },
+    {
+      "name": "ohos_electron_hap",
+      "path": "projects/ohos_electron_hap",
+      "repo": "https://github.com/ohosvscode/ohos_electron_hap.git",
+      "revision": "main",
+      "resolvedCommit": "0da7eb4c57a21e6ca0cffac247fb26977cb42f9d",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.3(15)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "open_neteasy_cloud",
+      "path": "projects/open_neteasy_cloud",
+      "repo": "https://github.com/linwu-hi/open_neteasy_cloud.git",
+      "revision": "main",
+      "resolvedCommit": "b562a70ffdbee5e192a1c3fb7fc8a4fb27119af4",
+      "compileSdkVersion": 9,
+      "compatibleSdkVersion": 9,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "OxHornCampus",
+      "path": "projects/OxHornCampus",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/OxHornCampus.git",
+      "revision": "master",
+      "resolvedCommit": "4e6e191346424916b118d6fb45736732193e5e67",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.5(17)",
+      "targetSdkVersion": "6.0.2(22)"
+    },
+    {
+      "name": "PageSlipPerformanceIssue",
+      "path": "projects/PageSlipPerformanceIssue",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/PageSlipPerformanceIssue.git",
+      "revision": "master",
+      "resolvedCommit": "36c5d6287b73d2392306afdc2ad391964e863f52",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "rdbStore",
+      "path": "projects/rdbStore",
+      "repo": "https://gitcode.com/gh_mirrors/rd/rdbStore.git",
+      "revision": "main",
+      "resolvedCommit": "11e6ab91862f10482d9ca0acf57c07f48d0cef76",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.1(13)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "ringtone-kit_-sample-code_-demo",
+      "path": "projects/ringtone-kit_-sample-code_-demo",
+      "repo": "https://gitcode.com/HarmonyOS_Samples/ringtone-kit_-sample-code_-demo.git",
+      "revision": "master",
+      "resolvedCommit": "61b47980efba070194798ba9cee65dfa53d1fd67",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "TransitionPerformanceIssue",
+      "path": "projects/TransitionPerformanceIssue",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/TransitionPerformanceIssue.git",
+      "revision": "master",
+      "resolvedCommit": "9b4dd39041982ee9e5a77a65912996a495d36ef2",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "uidesign_kit_codelab_hdsnavigation_arkts",
+      "path": "projects/uidesign_kit_codelab_hdsnavigation_arkts",
+      "repo": "https://gitcode.com/HarmonyOS_Codelabs/uidesign_kit_codelab_hdsnavigation_arkts.git",
+      "revision": "master",
+      "resolvedCommit": "e6f961492aa8a636ff3d624f8b973c7d05ab28e3",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.1.0(18)",
+      "targetSdkVersion": "6.1.0(23)"
+    },
+    {
+      "name": "Wechat_HarmonyOS",
+      "path": "projects/Wechat_HarmonyOS",
+      "repo": "https://github.com/ausboyue/Wechat_HarmonyOS.git",
+      "revision": "main",
+      "resolvedCommit": "38a1671c76d889e79701a601c00f05e9112db6f7",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.3(15)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "Youtube-Music-ArkTS-Clone",
+      "path": "projects/Youtube-Music-ArkTS-Clone",
+      "repo": "https://github.com/Charles-Stark/Youtube-Music-ArkTS-Clone.git",
+      "revision": "main",
+      "resolvedCommit": "f925981b8a5c4483be371bfd672722526b4986cf",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "hll-wp-therouter-harmony",
+      "path": "projects/hll-wp-therouter-harmony",
+      "repo": "https://github.com/HuolalaTech/hll-wp-therouter-harmony.git",
+      "revision": "dev",
+      "resolvedCommit": "d90329c6ffc8ccdf37f424336ba89dcb48c3134a",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": null,
+      "targetSdkVersion": null
+    },
+    {
+      "name": "Rental",
+      "path": "projects/Rental",
+      "repo": "https://github.com/yongoe1024/Rental.git",
+      "revision": "main",
+      "resolvedCommit": "8c6eb31b4d04411b1247b762e33b806b1c61e675",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    },
+    {
+      "name": "STUFFS_NEXT",
+      "path": "projects/STUFFS_NEXT",
+      "repo": "https://github.com/awaLiny2333/STUFFS_NEXT.git",
+      "revision": "master",
+      "resolvedCommit": "e35b7584aba160d9cae22509c0dae8184b5b5d86",
+      "compileSdkVersion": null,
+      "compatibleSdkVersion": "5.0.0(12)",
+      "targetSdkVersion": null
+    }
+  ]
+}
