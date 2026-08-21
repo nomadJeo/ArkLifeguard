@@ -1,0 +1,14 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "mainElement": "MainAbility",
+    "abilities": [
+      {
+        "name": "MainAbility",
+        "srcEntry": "./ets/MainAbility.ets",
+        "exported": true
+      }
+    ]
+  }
+}
