@@ -45,24 +45,22 @@
  * └─────────────────────────────────────────────────────────────────┘
  */
 
-import { Scene } from "arkanalyzer/lib/Scene";
-import { ArkClass } from "arkanalyzer/lib/core/model/ArkClass";
-import { ArkMethod } from "arkanalyzer/lib/core/model/ArkMethod";
 import {
+  Scene,
+  ArkClass,
+  ArkMethod,
   Stmt,
   ArkAssignStmt,
-} from "arkanalyzer/lib/core/base/Stmt";
-import {
   AbstractInvokeExpr,
   ArkNewExpr,
-} from "arkanalyzer/lib/core/base/Expr";
-import { Constant } from "arkanalyzer/lib/core/base/Constant";
-import { Local } from "arkanalyzer/lib/core/base/Local";
-import {
+  Constant,
+  Local,
   StringType,
   ClassType,
-} from "arkanalyzer/lib/core/base/Type";
-import { ArkInstanceFieldRef } from "arkanalyzer/lib";
+  ArkInstanceFieldRef,
+} from "../adapter/arkanalyzer";
+
+//自定义模块导入
 import {
   AbilityNavigationTarget,
   NavigationType,

@@ -26,10 +26,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { Scene } from 'arkanalyzer/lib/Scene';
-import { ArkClass } from 'arkanalyzer/lib/core/model/ArkClass';
-import { ArkMethod } from 'arkanalyzer/lib/core/model/ArkMethod';
-import { ClassSignature } from 'arkanalyzer/lib/core/model/ArkSignature';
+import { Scene,ArkClass,ArkMethod,ClassSignature} from '../adapter/arkanalyzer';
 import {
     AbilityInfo,
     AbilityLifecycleMethodStage,

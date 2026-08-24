@@ -24,11 +24,13 @@
  * - 生命周期阶段枚举
  */
 
-import {ArkClass} from "arkanalyzer/lib/core/model/ArkClass";
-import {ArkMethod} from "arkanalyzer/lib/core/model/ArkMethod";
-import {ClassSignature} from "arkanalyzer/lib/core/model/ArkSignature";
-import {ArkField} from "arkanalyzer/lib/core/model/ArkField";
-import {ViewTreeNode} from "arkanalyzer/lib/core/graph/ViewTree";
+import {
+  ArkClass,
+  ArkMethod,
+  ClassSignature,
+  ArkField,
+  ViewTreeNode,
+} from "../adapter/arkanalyzer";
 
 // ============================================================================
 // 第一部分：生命周期阶段定义
