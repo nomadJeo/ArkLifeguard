@@ -14,6 +14,7 @@ export {
   ArkAssignStmt,
   ArkIfStmt,
   ArkInvokeStmt,
+  ArkReturnStmt,
   ArkReturnVoidStmt,
   AbstractInvokeExpr,
   StringType,
@@ -31,6 +32,12 @@ export {
   ArkSignatureBuilder,
   ValueUtil,
   CONSTRUCTOR_NAME,
+  FunctionType,
+  CallGraph,
+  ClassHierarchyAnalysis,
+  CallGraphBuilder,
+  addCfg2Stmt,
+  SceneConfig,
 } from "arkanalyzer";
 
 export { Language } from "arkanalyzer/lib/core/model/ArkFile";

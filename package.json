@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:lifecycle": "vitest run test/lifecycle",
+    "test:ifds": "vitest run test/ifds",
     "arkanalyzer": "arkanalyzer",
     "inspect:project-ir": "vite-node scripts/inspect-project-ir.ts",
     "inspect:dummymain": "vite-node scripts/inspect-dummymain.ts",
