@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import 'arkanalyzer';
 import type { Scene } from 'arkanalyzer';
 import { AbilityCollector } from '../../src/lifecycle/AbilityCollector';
@@ -53,5 +53,20 @@ describe('ViewTreeCallbackExtractor', () => {
         expect(eventTypes.has(UIEventType.ON_TOUCH)).toBe(true);
         expect(eventTypes.has(UIEventType.ON_CHANGE)).toBe(true);
         expect(eventTypes.has(UIEventType.ON_APPEAR)).toBe(true);
+    });
+
+    it('skips a component when ArkAnalyzer cannot render a recursive ViewTree signature', () => {
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const componentClass = {
+            getName: () => 'RecursiveGenericComponent',
+            getViewTree: () => {
+                throw new RangeError('Maximum call stack size exceeded');
+            },
+        };
+
+        expect(new ViewTreeCallbackExtractor({} as Scene)
+            .extractFromComponent(componentClass as any)).toEqual([]);
+        expect(warning).toHaveBeenCalledWith(expect.stringContaining('RecursiveGenericComponent'));
+        warning.mockRestore();
     });
 });
