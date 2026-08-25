@@ -125,6 +125,24 @@ export class ViewTreeCallbackExtractor {
    * @returns UI 回调信息数组
    */
   public extractFromComponent(componentClass: ArkClass): UICallbackInfo[] {
+    try {
+      return this.extractFromComponentUnsafe(componentClass);
+    } catch (error) {
+      // ArkAnalyzer 1.0.90 may fail while resolving a ViewTree method whose
+      // signature contains mutually recursive generic types. Skipping only
+      // that component keeps lifecycle/nullness analysis conservative and
+      // prevents one framework model failure from aborting the whole project.
+      if (!(error instanceof RangeError)) {
+        throw error;
+      }
+      console.warn(
+        `[ViewTreeCallbackExtractor] Skipping ViewTree for ${componentClass.getName()}: ${error.message}`,
+      );
+      return [];
+    }
+  }
+
+  private extractFromComponentUnsafe(componentClass: ArkClass): UICallbackInfo[] {
     const callbacks: UICallbackInfo[] = [];
 
     // 获取 Component 的 ViewTree

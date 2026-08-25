@@ -53,7 +53,6 @@ export abstract class DataflowSolver<D> {
     constructor(problem: DataflowProblem<D>, scene: Scene) {
         this.problem = problem;
         this.scene = scene;
-        scene.inferTypes();
         this.zeroFact = problem.createZeroValue();
         this.workList = new Array<PathEdge<D>>();
         this.pathEdgeSet = new Set<PathEdge<D>>();
@@ -98,8 +97,13 @@ export abstract class DataflowSolver<D> {
     }
 
     protected buildStmtMapInClass(): void {
-        const methods = this.scene.getMethods();
-        methods.push(this.problem.getEntryMethod());
+        // Scene.getMethods() may expose the Scene's backing array.  Mutating it
+        // here makes every subsequent solver see another synthetic entry and is
+        // especially costly for multi-root analyses.
+        const methods = new Set([
+            ...this.scene.getMethods(),
+            this.problem.getEntryMethod(),
+        ]);
         for (const method of methods) {
             const cfg = method.getCfg();
             const blocks: BasicBlock[] = [];
@@ -140,10 +144,15 @@ export abstract class DataflowSolver<D> {
     }
 
     protected getAllCalleeMethods(callNode: ArkInvokeStmt): Set<ArkMethod> {
+        const caller = callNode.getCfg()?.getDeclaringMethod() ??
+            this.problem.getEntryMethod();
+        const callerNode = this.CHA.getCallGraph()
+            .getCallGraphNodeByMethod(caller.getSignature());
+        if (!callerNode) {
+            return new Set();
+        }
         const callSites = this.CHA.resolveCall(
-            this.CHA.getCallGraph()
-                .getCallGraphNodeByMethod(this.problem.getEntryMethod().getSignature())
-                .getID(),
+            callerNode.getID(),
             callNode
         );
         const methods: Set<ArkMethod> = new Set();

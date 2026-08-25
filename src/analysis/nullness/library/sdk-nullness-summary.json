@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "methods": [
+    {
+      "className": "AppStorage",
+      "methodName": "get",
+      "returnNullness": "maybe-undefined"
+    },
+    {
+      "className": "Button",
+      "methodName": "create",
+      "returnNullness": "non-null"
+    }
+  ]
+}
