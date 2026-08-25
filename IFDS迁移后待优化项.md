@@ -33,7 +33,7 @@ PR-3 已将旧项目使用的 IFDS 基础设施直接迁移到 `src/ifds`，并�
 
 ## 与空指针迁移的关系
 
-旧项目的 `NullnessSolver` 已经针对路径边去重、工作队列、incoming 和 end summary 做了空指针专用索引。如果下一阶段目标是“直接迁移空指针分析”，应先保留这些覆写，不要立即合并进通用 `DataflowSolver`；这样可以减少迁移语义变化。待 52 个 schema-v2 基准和真实项目回归稳定后，再评估将通用优化下沉到 `src/ifds`，并删除空指针求解器中的重复实现。
+空指针模块迁移时已经保留 `NullnessSolver` 针对路径边去重、工作队列、incoming 和 end summary 的专用索引，没有将其提前合并进通用 `DataflowSolver`。迁移后的 52 个 schema-v2 基准与旧项目结果一致，均为 37 TP、12 TN、0 FP、3 FN；`ExceptionPath`、`HideShow` 和 `EventListener` 仍是既有漏报，不属于迁移回归。后续应先处理这些已知能力缺口，再评估将通用优化下沉到 `src/ifds`，并删除空指针求解器中的重复实现。
 
 ## 完成判定
 
