@@ -237,9 +237,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
                     const receiverPath = NullnessAccessPath.fromValue(invokeExpr.getBase());
                     if (receiverPath.isPrefixOf(fact.accessPath)) {
                         const thisLocal = problem.getThisLocal(method);
-                        const remainingFields = fact.accessPath.fields.slice(
-                            receiverPath.fields.length
-                        );
+                        const remainingFields = fact.accessPath.remainingFieldsAfter(receiverPath);
                         // Entering an instance method already proves that its
                         // receiver is non-null on the normal call edge.  Only
                         // facts below the receiver (receiver.field) belong in
@@ -285,9 +283,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
 
                     const parameterLocal = problem.getParameterLocal(method, index);
                     if (parameterLocal) {
-                        const remainingFields = fact.accessPath.fields.slice(
-                            argumentPath.fields.length
-                        );
+                        const remainingFields = fact.accessPath.remainingFieldsAfter(argumentPath);
                         result.add(fact.deriveWithNewAccessPath(
                             new NullnessAccessPath(
                                 parameterLocal,
@@ -371,7 +367,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
                     problem.isTrackableAccessPath(returnTargetPath)) {
                     const returnedPath = NullnessAccessPath.fromValue(srcStmt.getOp());
                     if (!returnedPath.isEmpty() && returnedPath.isPrefixOf(fact.accessPath)) {
-                        const remainingFields = fact.accessPath.fields.slice(returnedPath.fields.length);
+                        const remainingFields = fact.accessPath.remainingFieldsAfter(returnedPath);
                         const mappedPath = new NullnessAccessPath(
                             returnTargetPath.base,
                             returnTargetPath.baseType,
@@ -568,7 +564,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
                     continue;
                 }
                 const closurePath = NullnessAccessPath.fromValue(calleeClosureRef);
-                const remainingFields = fact.accessPath.fields.slice(callerPath.fields.length);
+                const remainingFields = fact.accessPath.remainingFieldsAfter(callerPath);
                 const mappedPath = new NullnessAccessPath(
                     closurePath.base,
                     closurePath.baseType,
@@ -634,7 +630,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
         }
         const parameter = this.getParameterLocal(callee, 0);
         if (!parameter) return result;
-        const remainingFields = fact.accessPath.fields.slice(receiverPayload.fields.length);
+        const remainingFields = fact.accessPath.remainingFieldsAfter(receiverPayload);
         result.add(fact.deriveWithNewAccessPath(new NullnessAccessPath(
             parameter,
             parameter.getType(),
@@ -1071,7 +1067,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
             rightOp.getOperator() === NormalBinaryOperator.NullishCoalescing) {
             const fallbackPath = NullnessAccessPath.fromValue(rightOp.getOp2());
             if (!fallbackPath.isEmpty() && fallbackPath.isPrefixOf(fact.accessPath)) {
-                const remainingFields = fact.accessPath.fields.slice(fallbackPath.fields.length);
+                const remainingFields = fact.accessPath.remainingFieldsAfter(fallbackPath);
                 result.add(fact.deriveWithNewAccessPath(
                     new NullnessAccessPath(
                         leftPath.base,
@@ -1105,7 +1101,7 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
             return result;
         }
 
-        const remainingFields = fact.accessPath.fields.slice(rightPath.fields.length);
+        const remainingFields = fact.accessPath.remainingFieldsAfter(rightPath);
         const mappedPath = new NullnessAccessPath(
             leftPath.base,
             leftPath.baseType,
@@ -1225,7 +1221,9 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
                     fact.kind === NullnessKind.MaybeNullish
                     ? `Potential nullish dereference of ${fact.accessPath.toString()}`
                     : `Definite ${fact.kind} dereference of ${fact.accessPath.toString()}`,
-            confidence: fact.isUnresolvedEvidence() ? 'low' : 'high',
+            confidence: fact.isUnresolvedEvidence() || fact.isApproximateEvidence()
+                ? 'low'
+                : 'high',
         });
     }
 

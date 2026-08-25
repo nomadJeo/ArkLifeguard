@@ -64,7 +64,7 @@ export class AsyncBoundarySummary implements NullnessLibrarySummary {
         if (argumentPath.isEmpty() || !argumentPath.isPrefixOf(inputFact.accessPath)) {
             return new Set();
         }
-        const remainingFields = inputFact.accessPath.fields.slice(argumentPath.fields.length);
+        const remainingFields = inputFact.accessPath.remainingFieldsAfter(argumentPath);
         return new Set([inputFact.deriveWithNewAccessPath(
             new NullnessAccessPath(
                 resultPath.base,

@@ -314,7 +314,7 @@ describe('NullnessKind narrowing', () => {
 });
 
 describe('Nullness IFDS scaffold', () => {
-    it('folds overlong access paths into a conservative wildcard suffix', () => {
+    it('folds overlong access paths into a field-anchored wildcard suffix', () => {
         const base = local('root');
         const concrete = new NullnessAccessPath(
             base,
@@ -323,12 +323,24 @@ describe('Nullness IFDS scaffold', () => {
         );
         const widened = concrete.truncateWithWildcard(2);
 
-        expect(widened.toString()).toBe('root.first.*');
+        expect(widened.toString()).toBe('root.first.*{second}');
         expect(widened.isPrefixOf(concrete)).toBe(true);
         expect(widened.fields).toHaveLength(2);
+        const parent = new NullnessAccessPath(
+            base,
+            null,
+            [field('first'), field('second')]
+        );
+        expect(parent.isPrefixOf(widened)).toBe(true);
+        expect(widened.remainingFieldsAfter(parent)).toHaveLength(1);
+        expect(widened.isPrefixOf(new NullnessAccessPath(
+            base,
+            null,
+            [field('first'), field('sibling'), field('third')]
+        ))).toBe(false);
     });
 
-    it('joins recursive entry kinds to maybe-nullish', () => {
+    it('widens recursive entry kinds without inventing the other nullish category', () => {
         const source = NullnessFact.create(
             new NullnessAccessPath(local('value')),
             NullnessKind.Undefined,
@@ -336,8 +348,30 @@ describe('Nullness IFDS scaffold', () => {
         );
 
         const widened = source.widenKindForRecursion();
-        expect(widened.kind).toBe(NullnessKind.MaybeNullish);
+        expect(widened.kind).toBe(NullnessKind.MaybeUndefined);
         expect(widened.accessPath.equals(source.accessPath)).toBe(true);
+    });
+
+    it('retains approximation evidence after a wildcard path is rebound', () => {
+        const source = NullnessFact.create(
+            new NullnessAccessPath(
+                local('root'),
+                null,
+                [field('first'), field('second'), field('third')]
+            ),
+            NullnessKind.Null,
+            { kind: NullnessOriginKind.NullLiteral, stmt: stmt(1) }
+        );
+
+        const widened = source.abstractAccessPath(2);
+        const rebound = widened.deriveWithNewAccessPath(
+            new NullnessAccessPath(local('temporary')),
+            stmt(2)
+        );
+
+        expect(source.isApproximateEvidence()).toBe(false);
+        expect(widened.isApproximateEvidence()).toBe(true);
+        expect(rebound.isApproximateEvidence()).toBe(true);
     });
 
     it('uses semantic fact equality and safe placeholder flow functions', () => {

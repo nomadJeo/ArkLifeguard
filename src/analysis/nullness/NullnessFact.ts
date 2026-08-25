@@ -53,19 +53,39 @@ class NullnessPromisePayloadSegment implements INullnessFieldSignature {
     }
 }
 
-/** Conservative suffix used when an access path exceeds the configured depth. */
+/**
+ * Conservative suffix used when an access path exceeds the configured depth.
+ *
+ * Keep the first omitted field as an anchor. A plain wildcard made
+ * `this.kdbx.credentials.passwordHash` indistinguishable from
+ * `this.kdbx.header`, because both collapsed to `this.kdbx.*`. The anchor
+ * still summarizes every descendant below `credentials`, but cannot match a
+ * sibling field such as `header`.
+ */
 class NullnessWildcardSegment implements INullnessFieldSignature {
+    constructor(readonly anchor: INullnessFieldSignature | null) {}
+
     getFieldName(): string {
-        return '*';
+        return this.anchor ? `*{${this.anchor.getFieldName()}}` : '*';
     }
 
     toString(): string {
-        return 'wildcard-suffix';
+        return this.anchor
+            ? `wildcard-suffix:${this.anchor.toString()}`
+            : 'wildcard-suffix';
+    }
+
+    matches(segment: INullnessFieldSignature): boolean {
+        if (!this.anchor) return true;
+        const candidate = segment instanceof NullnessWildcardSegment
+            ? segment.anchor
+            : segment;
+        return candidate !== null && this.anchor.toString() === candidate.toString();
     }
 }
 
 const PROMISE_PAYLOAD_SEGMENT = new NullnessPromisePayloadSegment();
-const WILDCARD_SEGMENT = new NullnessWildcardSegment();
+const WILDCARD_SEGMENT = new NullnessWildcardSegment(null);
 
 /** A minimal statement contract used only for provenance and source locations. */
 export interface INullnessStmt {
@@ -286,6 +306,9 @@ export class NullnessAccessPath {
 
     appendField(field: INullnessFieldSignature): NullnessAccessPath {
         this.assertNormal('append a field to');
+        if (this.hasWildcardSuffix()) {
+            return this;
+        }
         return new NullnessAccessPath(this.base, this.baseType, [...this.fields, field], this.isStatic);
     }
 
@@ -308,20 +331,49 @@ export class NullnessAccessPath {
 
     /**
      * Bound the field domain without dropping the fact. The last retained segment
-     * denotes every possible suffix, so the abstraction over-approximates all
-     * concrete paths which share the retained prefix.
+     * denotes every possible suffix below the first omitted field, so sibling
+     * object fields remain distinct while the number of stored segments stays
+     * bounded.
      */
     truncateWithWildcard(maxLength: number): NullnessAccessPath {
         if (this.special !== 'normal' || this.fields.length <= maxLength) {
             return this;
         }
         const prefixLength = Math.max(0, maxLength - 1);
+        const firstOmitted = this.fields[prefixLength];
+        const wildcard = firstOmitted instanceof NullnessWildcardSegment
+            ? firstOmitted
+            : new NullnessWildcardSegment(firstOmitted);
         return new NullnessAccessPath(
             this.base,
             this.baseType,
-            [...this.fields.slice(0, prefixLength), WILDCARD_SEGMENT],
+            [...this.fields.slice(0, prefixLength), wildcard],
             this.isStatic
         );
+    }
+
+    /**
+     * Return the semantic suffix after a known prefix. Consuming an anchored
+     * wildcard still leaves an unknown descendant; returning an empty suffix
+     * here would incorrectly turn `object.child.*` into nullable `object.child`.
+     */
+    remainingFieldsAfter(prefix: NullnessAccessPath): readonly INullnessFieldSignature[] {
+        const remaining = this.fields.slice(prefix.fields.length);
+        if (remaining.length > 0 || prefix.fields.length === 0 ||
+            prefix.fields.length !== this.fields.length) {
+            return remaining;
+        }
+        const summarized = this.fields[this.fields.length - 1];
+        const consumed = prefix.fields[prefix.fields.length - 1];
+        return summarized instanceof NullnessWildcardSegment &&
+            !(consumed instanceof NullnessWildcardSegment) &&
+            summarized.matches(consumed)
+            ? [WILDCARD_SEGMENT]
+            : remaining;
+    }
+
+    hasWildcardSuffix(): boolean {
+        return this.fields.some(field => field instanceof NullnessWildcardSegment);
     }
 
     equals(other: NullnessAccessPath | null): boolean {
@@ -348,10 +400,11 @@ export class NullnessAccessPath {
             return false;
         }
         for (let index = 0; index < this.fields.length; index++) {
-            if (this.fields[index] === WILDCARD_SEGMENT) {
-                return true;
+            const field = this.fields[index];
+            if (field instanceof NullnessWildcardSegment) {
+                return field.matches(other.fields[index]);
             }
-            if (!this.segmentsCompatible(this.fields[index], other.fields[index])) {
+            if (!this.segmentsCompatible(field, other.fields[index])) {
                 return false;
             }
         }
@@ -393,8 +446,11 @@ export class NullnessAccessPath {
         if (left.toString() === right.toString()) {
             return true;
         }
-        if (left === WILDCARD_SEGMENT || right === WILDCARD_SEGMENT) {
-            return true;
+        if (left instanceof NullnessWildcardSegment) {
+            return left.matches(right);
+        }
+        if (right instanceof NullnessWildcardSegment) {
+            return right.matches(left);
         }
         return left instanceof NullnessArrayIndexSegment &&
             right instanceof NullnessArrayIndexSegment &&
@@ -421,6 +477,8 @@ export class NullnessFact {
     readonly currentStmt: INullnessStmt | null;
     readonly predecessor: NullnessFact | null;
     readonly propagationDepth: number;
+    /** True once a bounded access-path abstraction has contributed to this fact. */
+    readonly approximated: boolean;
 
     private readonly zeroFact: boolean;
     private static zeroInstance: NullnessFact | null = null;
@@ -432,7 +490,8 @@ export class NullnessFact {
         currentStmt: INullnessStmt | null,
         predecessor: NullnessFact | null,
         propagationDepth: number,
-        zeroFact: boolean
+        zeroFact: boolean,
+        approximated: boolean
     ) {
         this.accessPath = accessPath;
         this.kind = kind;
@@ -441,6 +500,7 @@ export class NullnessFact {
         this.predecessor = predecessor;
         this.propagationDepth = propagationDepth;
         this.zeroFact = zeroFact;
+        this.approximated = approximated;
     }
 
     static getZeroFact(): NullnessFact {
@@ -452,7 +512,8 @@ export class NullnessFact {
                 null,
                 null,
                 0,
-                true
+                true,
+                false
             );
         }
         return NullnessFact.zeroInstance;
@@ -462,7 +523,7 @@ export class NullnessFact {
         if (accessPath.isZero() || accessPath.isEmpty()) {
             throw new Error('A nullness fact requires a non-empty, non-zero access path');
         }
-        return new NullnessFact(accessPath, kind, origin, origin.stmt, null, 0, false);
+        return new NullnessFact(accessPath, kind, origin, origin.stmt, null, 0, false, false);
     }
 
     isZeroFact(): boolean {
@@ -478,7 +539,8 @@ export class NullnessFact {
             stmt,
             this,
             this.propagationDepth + 1,
-            false
+            false,
+            this.approximated
         );
     }
 
@@ -494,7 +556,8 @@ export class NullnessFact {
             stmt,
             this,
             this.propagationDepth + 1,
-            false
+            false,
+            this.approximated || accessPath.hasWildcardSuffix()
         );
     }
 
@@ -511,7 +574,8 @@ export class NullnessFact {
             stmt,
             this,
             this.propagationDepth + 1,
-            false
+            false,
+            this.approximated
         );
     }
 
@@ -530,23 +594,34 @@ export class NullnessFact {
             this.currentStmt,
             this.predecessor,
             this.propagationDepth,
-            false
+            false,
+            true
         );
     }
 
-    /** Collapse all null/undefined alternatives at recursive fixed points. */
+    /**
+     * Collapse definite and possible values within their original nullish
+     * category. Null and undefined are joined only when both are observed by
+     * ordinary IFDS propagation, rather than being invented at every entry.
+     */
     widenKindForRecursion(): NullnessFact {
-        if (this.zeroFact || this.kind === NullnessKind.MaybeNullish) {
+        if (this.zeroFact || this.kind === NullnessKind.MaybeNull ||
+            this.kind === NullnessKind.MaybeUndefined ||
+            this.kind === NullnessKind.MaybeNullish) {
             return this;
         }
+        const widenedKind = this.kind === NullnessKind.Null
+            ? NullnessKind.MaybeNull
+            : NullnessKind.MaybeUndefined;
         return new NullnessFact(
             this.accessPath,
-            NullnessKind.MaybeNullish,
+            widenedKind,
             this.origin,
             this.currentStmt,
             this.predecessor,
             this.propagationDepth,
-            false
+            false,
+            this.approximated
         );
     }
 
@@ -597,6 +672,10 @@ export class NullnessFact {
 
     isUnresolvedEvidence(): boolean {
         return this.origin?.kind === NullnessOriginKind.UnresolvedReturn;
+    }
+
+    isApproximateEvidence(): boolean {
+        return this.approximated;
     }
 
     private assertNonZero(): void {
