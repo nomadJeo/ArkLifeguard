@@ -140,4 +140,47 @@ describe('ReportGenerator', () => {
         expect(JSON.parse(fs.readFileSync(outputPath, 'utf8')).analysisKind)
             .toBe('lifecycle-nullness');
     });
+
+    it('keeps the default JSON report focused on diagnostics', () => {
+        const report = JSON.parse(new ReportGenerator().generate(result, { format: 'json' }));
+        expect(report.summary).toEqual({
+            nullDereferences: 1,
+            resourceLeaks: 1,
+            methodLocalResourceLeaks: 0,
+        });
+        expect(report.nullness.diagnostics).toHaveLength(1);
+        expect(report.resourceAnalysis.resourceLeaks).toHaveLength(1);
+        expect(report.duration).toEqual({ total: 155 });
+        expect(report).not.toHaveProperty('settings');
+        expect(report).not.toHaveProperty('abilities');
+        expect(report).not.toHaveProperty('components');
+        expect(report).not.toHaveProperty('navigations');
+        expect(report).not.toHaveProperty('dummyMain');
+    });
+
+    it('includes lifecycle and solver internals in detailed JSON reports', () => {
+        const report = JSON.parse(new ReportGenerator().generate(result, {
+            format: 'json',
+            detailed: true,
+        }));
+        expect(report.settings.bounds.maxPropagationDepth).toBe(40);
+        expect(report.abilities).toHaveLength(1);
+        expect(report.components).toHaveLength(1);
+        expect(report.navigations).toHaveLength(1);
+        expect(report.dummyMain.methodSignature).toBe('DummyMain.main()');
+    });
+
+    it.each(['text', 'markdown', 'html'] as const)(
+        'hides lifecycle internals in compact %s reports',
+        format => {
+            const compact = new ReportGenerator().generate(result, { format });
+            const detailed = new ReportGenerator().generate(result, { format, detailed: true });
+            const internalsMarker = format === 'text'
+                ? 'Fact 传播深度上限'
+                : 'maxPropagationDepth';
+            expect(compact).not.toContain('EntryAbility');
+            expect(compact).not.toContain(internalsMarker);
+            expect(detailed).toContain(internalsMarker);
+        }
+    );
 });

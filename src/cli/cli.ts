@@ -25,8 +25,7 @@ interface AnalyzeCliOptions {
     inferTypes: boolean;
     navigation: boolean;
     uiCallbacks: boolean;
-    nullness: boolean;
-    resourceAnalysis: boolean;
+    checks: AnalysisCheck[];
     maxCallbackIterations: number;
     maxAbilitiesPerFlow: number;
     maxNavigationHops: number;
@@ -37,6 +36,8 @@ interface AnalyzeCliOptions {
     title?: string;
     verbose: boolean;
 }
+
+type AnalysisCheck = 'nullness' | 'resource';
 
 export async function runCLI(argv: string[] = process.argv): Promise<number> {
     let exitCode = 0;
@@ -57,27 +58,32 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
         .option('--no-infer-types', 'skip ArkAnalyzer type inference')
         .option('--no-navigation', 'skip navigation relationship collection')
         .option('--no-ui-callbacks', 'disable ViewTree UI callback extraction')
-        .option('--no-nullness', 'build the lifecycle model without running nullness IFDS')
-        .option('--no-resource-analysis', 'disable resource Source/Sink IFDS analysis')
+        .addOption(new Option(
+            '--checks <checks>',
+            'checks to run: all, nullness, resource, or a comma-separated list'
+        ).argParser(parseChecks).default(['nullness', 'resource'] as AnalysisCheck[], 'all'))
         .option('--max-callback-iterations <n>', 'bounded lifecycle expansion rounds', positiveInteger, 1)
         .option('--max-abilities-per-flow <n>', 'maximum Abilities visited by one resource flow', nonNegativeInteger, 3)
         .option('--max-navigation-hops <n>', 'maximum navigation hops in one resource flow', nonNegativeInteger, 5)
         .option('--max-access-path-length <n>', 'maximum nullness access-path length', positiveInteger, 5)
         .option('--max-propagation-depth <n>', 'maximum resource/nullness fact propagation depth', positiveInteger, 40)
         .option('--report-unresolved-returns', 'include low-confidence unresolved-return reports', false)
-        .option('-d, --detailed', 'include lifecycle and navigation details', false)
+        .option('-d, --detailed', 'include lifecycle, component, navigation and solver internals in the report', false)
         .option('--title <title>', 'custom report title')
         .option('-v, --verbose', 'show lifecycle analysis logs', false)
         .action(async (projectPath: string, options: AnalyzeCliOptions) => {
             try {
+                const selectedChecks = new Set(options.checks);
+                const runNullness = selectedChecks.has('nullness');
+                const runResourceAnalysis = selectedChecks.has('resource');
                 const analysisOptions: ProjectAnalysisOptions = {
                     ...(options.sdkRoot ? { sdkRoot: path.resolve(options.sdkRoot) } : {}),
                     sdkPaths: options.sdk.map(value => path.resolve(value)),
                     inferTypes: options.inferTypes,
                     analyzeNavigation: options.navigation,
                     extractUICallbacks: options.uiCallbacks,
-                    runNullness: options.nullness,
-                    runResourceAnalysis: options.resourceAnalysis,
+                    runNullness,
+                    runResourceAnalysis,
                     maxCallbackIterations: options.maxCallbackIterations,
                     maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
                     maxNavigationHops: options.maxNavigationHops,
@@ -146,4 +152,22 @@ function nonNegativeInteger(value: string): number {
         throw new InvalidArgumentError(`expected a non-negative integer, received: ${value}`);
     }
     return parsed;
+}
+
+function parseChecks(value: string): AnalysisCheck[] {
+    const requested = value.split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+    if (requested.includes('all')) {
+        if (requested.length !== 1) {
+            throw new InvalidArgumentError('"all" cannot be combined with other checks');
+        }
+        return ['nullness', 'resource'];
+    }
+    const allowed = new Set<AnalysisCheck>(['nullness', 'resource']);
+    const invalid = requested.filter(item => !allowed.has(item as AnalysisCheck));
+    if (requested.length === 0 || invalid.length > 0) {
+        throw new InvalidArgumentError(
+            `expected all, nullness, resource, or a comma-separated list; received: ${value}`
+        );
+    }
+    return [...new Set(requested)] as AnalysisCheck[];
 }

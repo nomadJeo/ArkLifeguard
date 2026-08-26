@@ -2,7 +2,7 @@
 
 ArkLifeguard 是面向 HarmonyOS/OpenHarmony ArkTS 应用的命令行静态分析工具。项目基于 ArkAnalyzer 构建程序 IR，通过有界生命周期模型和 IFDS 数据流分析，在不运行应用的情况下辅助发现空指针解引用与资源未释放问题。
 
-> 项目的使用方式请阅读[QUICKSTART.md](./QUICKSTART.md)。
+> 项目的使用方式请阅读[快速使用指南](./QUICKSTART.md)。
 
 ## 主要功能
 
@@ -45,11 +45,12 @@ JSON / Text / Markdown / HTML 报告
 ```bash
 npm ci
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --checks all \
   --format json \
   --output out/report.json
 ```
 
-默认同时运行资源泄漏分析和空指针分析。SDK 配置、真实工程要求、分析边界与报告解读见 [快速使用指南](./QUICKSTART.md)。
+默认同时运行资源泄漏分析和空指针分析；使用 `--checks nullness` 或 `--checks resource` 可选择单项检查。默认报告只保留诊断和核心摘要，`--detailed` 才输出 Ability、Component、导航、DummyMain 和求解统计等内部信息。SDK 配置、真实工程要求、分析边界与报告解读见 [快速使用指南](./QUICKSTART.md)。
 
 构建后也可以直接运行发布产物：
 
@@ -94,7 +95,7 @@ ArkLifeguard/
 | `--max-access-path-length` | 5 | 空指针访问路径的最大长度。 |
 | `--max-propagation-depth` | 40 | 资源与空指针 Fact 的最大传播深度。 |
 
-报告中的 `settings.bounds` 记录参数值，`settings.boundEnforcement` 说明参数在本次分析中是否实际生效。
+详细报告中的 `settings.bounds` 记录参数值，`settings.boundEnforcement` 说明参数在本次分析中是否实际生效；生成详细报告时使用 `--detailed`。
 
 ## 常用开发命令
 

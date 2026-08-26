@@ -58,8 +58,6 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
 
 ## 3. 运行完整分析
 
-以下命令默认执行 Scene 构建、生命周期建模、导航分析、资源泄漏分析、空指针分析和报告生成：
-
 ```bash
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --format json \
@@ -91,21 +89,29 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
 
 ## 4. 选择分析模式
 
-默认同时启用资源分析和空指针分析。需要缩小范围时使用：
+使用 `--checks` 选择检查类型。默认值为 `all`，即同时运行资源泄漏和空指针检查：
 
 ```bash
 # 只运行空指针分析
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
-  --no-resource-analysis \
+  --checks nullness \
   --format json \
   --output out/nullness-report.json
 
 # 只运行资源分析
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
-  --no-nullness \
+  --checks resource \
   --format json \
   --output out/resource-report.json
+
+# 显式运行全部检查
+npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --checks all \
+  --format json \
+  --output out/report.json
 ```
+
+也可以写成 `--checks nullness,resource`。未知检查名会作为参数错误处理。分析器选择统一使用 `--checks`，能够直接表达本次要运行的检查，并方便后续增加新的检查类型。
 
 正式分析通常不建议关闭类型推断、UI 回调或导航建模。以下选项主要用于定位兼容性或性能问题：
 
@@ -128,28 +134,39 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
 
 未指定 `--output` 时，报告输出到标准输出。自动化处理和真实项目统计建议使用 JSON；人工审阅可使用 Markdown 或 HTML。
 
+四种格式默认都只输出用户通常需要的内容：项目状态、空指针诊断、跨过程资源泄漏诊断、方法内资源泄漏诊断、核心数量、总耗时以及警告/错误。需要审计分析过程时再增加 `--detailed`：
+
+```bash
+npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --format json \
+  --output out/detailed-report.json \
+  --detailed
+```
+
+详细报告额外包含 SDK 与有界参数、Ability、Component、UI 回调、导航、DummyMain、Source/Sink、传播统计和分阶段耗时。`--detailed` 只改变报告内容，不改变分析算法或诊断结果。
+
 ## 6. 解读 JSON 报告
 
-首先检查以下字段：
+默认 JSON 报告优先保留以下字段：
 
 | 字段 | 含义 |
 |---|---|
 | `status` | 完整链路是否成功；`failed` 时继续查看 `errors`。 |
-| `settings` | 实际启用的分析器、SDK 和有界参数。 |
-| `settings.boundEnforcement` | 各边界在本次分析中是否真正生效。 |
 | `summary.nullDereferences` | 空指针候选数量。 |
 | `summary.resourceLeaks` | 跨生命周期 IFDS 资源泄漏数量。 |
-| `summary.sources` / `summary.sinks` | 实际扫描到的资源申请/释放调用数量。 |
+| `summary.methodLocalResourceLeaks` | 方法内资源泄漏候选数量。 |
 | `nullness.diagnostics` | 空值来源、访问路径、解引用位置和置信度。 |
 | `resourceAnalysis.resourceLeaks` | 资源类型、申请位置和期望释放方法。 |
-| `resourceAnalysis.methodLocal` | 方法内资源检测候选及独立统计。 |
+| `resourceAnalysis.methodLocal.leaks` | 方法内资源检测候选。 |
 | `warnings` / `errors` | 降级建模、兼容性告警和失败原因。 |
-| `duration` | Scene、生命周期、资源分析和空指针分析耗时。 |
+| `duration.total` | 分析总耗时。 |
+
+使用 `--detailed` 后，JSON 恢复完整分析结果，其中 `settings`、`abilities`、`components`、`navigations`、`dummyMain` 和完整 `duration` 用于复现实验或排查分析过程。
 
 可用 Node.js 快速提取关键结果：
 
 ```bash
-node -e "const r=require('./out/report.json'); console.log({status:r.status,nullness:r.summary.nullDereferences,resourceLeaks:r.summary.resourceLeaks,sources:r.summary.sources,sinks:r.summary.sinks})"
+node -e "const r=require('./out/report.json'); console.log({status:r.status,nullness:r.summary.nullDereferences,resourceLeaks:r.summary.resourceLeaks,methodLocal:r.summary.methodLocalResourceLeaks})"
 ```
 
 方法内资源候选和 IFDS 资源泄漏采用不同分析粒度，数量不要求一致。正式结论应优先结合 `resourceAnalysis.resourceLeaks`、传播上下文和源码人工审核。
@@ -181,7 +198,7 @@ NODE_OPTIONS=--max-old-space-size=4096 npm run cli -- analyze "/absolute/path/to
   --output out/report.json
 ```
 
-如果事实规模仍然过大，应先检查报告耗时，再逐步降低 `maxPropagationDepth`、`maxCallbackIterations` 或资源流边界；修改边界会影响覆盖范围，应在报告中保留实际配置。
+如果事实规模仍然过大，应使用 `--detailed` 检查分阶段耗时，再逐步降低 `maxPropagationDepth`、`maxCallbackIterations` 或资源流边界；修改边界会影响覆盖范围，复现实验时应保留详细报告中的实际配置。
 
 ### ViewTree 无法完整构建
 

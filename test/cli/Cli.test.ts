@@ -21,7 +21,7 @@ describe('ArkLifeguard CLI', () => {
         ])).toBe(1);
     });
 
-    it('runs the default resource-analysis CLI pipeline and emits JSON results', async () => {
+    it('selects only resource analysis and emits compact JSON results', async () => {
         const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
         const code = await runCLI([
             'node',
@@ -30,7 +30,8 @@ describe('ArkLifeguard CLI', () => {
             fixturePath('resource', 'source-sink'),
             '--sdk',
             fixturePath('sdk'),
-            '--no-nullness',
+            '--checks',
+            'resource',
             '--format',
             'json',
         ]);
@@ -43,6 +44,40 @@ describe('ArkLifeguard CLI', () => {
             enabled: true,
             success: true,
         });
+        expect(JSON.parse(json ?? '{}').nullness).toMatchObject({ enabled: false });
         output.mockRestore();
+    });
+
+    it('runs both core checks by default', async () => {
+        const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const code = await runCLI([
+            'node',
+            'arklifeguard',
+            'analyze',
+            fixturePath('resource', 'source-sink'),
+            '--sdk',
+            fixturePath('sdk'),
+            '--format',
+            'json',
+        ]);
+
+        expect(code).toBe(0);
+        const json = output.mock.calls.map(call => call.join(' '))
+            .find(value => value.startsWith('{'));
+        const report = JSON.parse(json ?? '{}');
+        expect(report.nullness.enabled).toBe(true);
+        expect(report.resourceAnalysis.enabled).toBe(true);
+        output.mockRestore();
+    });
+
+    it('rejects an unknown check name', async () => {
+        expect(await runCLI([
+            'node',
+            'arklifeguard',
+            'analyze',
+            '/not/analyzed',
+            '--checks',
+            'nullness,unknown',
+        ])).toBe(1);
     });
 });
