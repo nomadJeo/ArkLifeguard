@@ -1,15 +1,17 @@
-# ArkLifeguard 空指针分析 Quick Start
+# ArkLifeguard 快速使用指南
 
-ArkLifeguard 可以从 HarmonyOS/ArkTS 工程目录开始，依次完成 Scene 构建、类型推断、有界生命周期 DummyMain 生成、空指针 IFDS 分析和报告输出。当前 CLI 不运行资源泄漏分析，也不需要 GUI。
+本文说明如何使用 ArkLifeguard 分析一个真实 HarmonyOS/OpenHarmony ArkTS 源码工程，并生成可审计的静态分析报告。
 
-## 1. 环境准备
+## 1. 准备环境
 
-需要：
+需要准备：
 
 - Node.js 18 或更高版本；
 - npm；
 - HarmonyOS/OpenHarmony ETS SDK；
-- 待分析应用的完整工程目录。
+- 待分析应用的完整源码工程。
+
+应用目录应能够被 ArkAnalyzer 读取，通常包含 `build-profile.json5`、模块级 `module.json5` 以及 `.ets`/`.ts` 源文件。ArkLifeguard 不直接分析 `.hap` 或 `.app` 安装包。
 
 在 ArkLifeguard 根目录安装依赖：
 
@@ -17,61 +19,61 @@ ArkLifeguard 可以从 HarmonyOS/ArkTS 工程目录开始，依次完成 Scene �
 npm ci
 ```
 
-### SDK 放置方式
+## 2. 配置 ETS SDK
 
-默认从以下目录发现 SDK：
+### 使用默认 SDK 目录
+
+工具默认从以下位置发现 SDK：
 
 ```text
-ArkLifeguard/
-└── sdk/
-    └── default/
-        ├── openharmony/
-        │   └── ets/
-        └── hms/
-            └── ets/
+sdk/default/
+├── openharmony/ets/
+└── hms/ets/
 ```
 
-`openharmony/ets` 和 `hms/ets` 至少存在一个即可。SDK 不在默认位置时，可以在命令中使用 `--sdk-root` 或 `--sdk`。
+至少提供其中一个目录。如果仓库中已经包含可用 SDK，无需额外传参。
 
-## 2. 运行一次完整分析
+### 使用本机 SDK
 
-在 ArkLifeguard 根目录执行：
-
-```bash
-npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
-  --format json \
-  --output out/nullness-report.json
-```
-
-工程路径建议使用绝对路径。执行成功后，JSON 报告写入 `out/nullness-report.json`。
-
-如果 SDK 位于其他目录：
+`--sdk-root` 应指向同时包含 `openharmony/ets` 或 `hms/ets` 的上级目录：
 
 ```bash
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --sdk-root "/absolute/path/to/sdk-root" \
   --format json \
-  --output out/nullness-report.json
+  --output out/report.json
 ```
 
-`--sdk-root` 所指目录下应存在 `openharmony/ets` 或 `hms/ets`。也可以直接指定一个或多个 ETS SDK 目录：
+也可以直接指定一个或多个 ETS SDK 目录：
 
 ```bash
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --sdk "/absolute/path/to/openharmony/ets" \
   --sdk "/absolute/path/to/hms/ets" \
   --format json \
-  --output out/nullness-report.json
+  --output out/report.json
 ```
 
-## 3. 配置有界分析参数
+指定 `--sdk` 后，工具优先使用这些显式路径，不再从 `--sdk-root` 发现 SDK。
 
-推荐显式保留默认边界，便于复现分析结果：
+## 3. 运行完整分析
+
+以下命令默认执行 Scene 构建、生命周期建模、导航分析、资源泄漏分析、空指针分析和报告生成：
 
 ```bash
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --format json \
-  --output out/nullness-report.json \
+  --output out/report.json
+```
+
+工程路径包含空格或中文时应保留引号。`out/` 不存在时会自动创建。
+
+为了便于复现实验，建议在正式分析中显式记录有界参数：
+
+```bash
+npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --format json \
+  --output out/report.json \
   --max-callback-iterations 1 \
   --max-abilities-per-flow 3 \
   --max-navigation-hops 5 \
@@ -79,121 +81,122 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --max-propagation-depth 40
 ```
 
-| CLI 参数 | 默认值 | 当前作用 |
+| 参数 | 默认值 | 影响范围 |
 |---|---:|---|
-| `--max-callback-iterations` | 1 | 限制 Ability、Component 和 UI 回调序列的展开轮数；直接影响 DummyMain CFG 规模。 |
-| `--max-access-path-length` | 5 | 限制空指针 Fact 跟踪的字段/数组访问路径长度。 |
-| `--max-propagation-depth` | 40 | 限制会改变 Fact 的传播深度，用于抑制真实工程中的无界增长。 |
-| `--max-abilities-per-flow` | 3 | 保留在统一有界配置中；当前资源/污点分析关闭，空指针 Fact 不消费此参数。 |
-| `--max-navigation-hops` | 5 | 保留在统一有界配置中；当前资源/污点分析关闭，空指针 Fact 不消费此参数。 |
+| `--max-callback-iterations` | 1 | DummyMain 中生命周期和 UI 回调序列的展开规模。 |
+| `--max-abilities-per-flow` | 3 | 单条资源流允许访问的 Ability 数量。 |
+| `--max-navigation-hops` | 5 | 单条资源流允许经过的导航跳数。 |
+| `--max-access-path-length` | 5 | 空指针字段、数组等访问路径长度。 |
+| `--max-propagation-depth` | 40 | 资源和空指针 Fact 的传播深度。 |
 
-报告中的 `settings.bounds` 保存参数数值，`settings.boundEnforcement` 说明参数在本次分析中是否实际生效。
+## 4. 选择分析模式
 
-## 4. 报告格式
-
-`--format` 支持：
-
-- `json`：便于脚本处理和后续统计；
-- `text`：适合直接在终端阅读；
-- `markdown`：适合归档到项目文档；
-- `html`：生成可直接用浏览器打开的静态报告，不需要 GUI 或服务器。
-
-如果不指定 `--output`，报告会输出到标准输出：
+默认同时启用资源分析和空指针分析。需要缩小范围时使用：
 
 ```bash
-npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" --format text
+# 只运行空指针分析
+npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --no-resource-analysis \
+  --format json \
+  --output out/nullness-report.json
+
+# 只运行资源分析
+npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --no-nullness \
+  --format json \
+  --output out/resource-report.json
 ```
 
-需要生命周期、Component 和导航细节时增加 `--detailed`。使用 `--verbose` 时建议同时指定 `--output`，避免详细日志与标准输出中的报告混合。
+正式分析通常不建议关闭类型推断、UI 回调或导航建模。以下选项主要用于定位兼容性或性能问题：
 
-## 5. 阅读 JSON 空指针报告
+- `--no-infer-types`：跳过类型推断；
+- `--no-ui-callbacks`：不提取 ViewTree UI 回调；
+- `--no-navigation`：不收集导航关系；
+- `--report-unresolved-returns`：输出未解析返回值形成的低置信度空指针候选；
+- `--verbose`：显示生命周期建模日志。
 
-主要字段：
+## 5. 选择报告格式
 
-- `status`：完整链路是否成功；
-- `summary.nullDereferences`：空指针候选报告数；
-- `summary.reachedStatements` 和 `summary.reachedFacts`：IFDS 到达规模；
-- `dummyMain`：生命周期入口、基本块和调用统计；
-- `nullness.success`：空指针分析是否成功；
-- `nullness.diagnostics`：具体的空指针候选位置；
-- `warnings` 和 `errors`：降级建模信息与分析错误。
-
-单条 `nullness.diagnostics` 包含：
-
-- `nullness`：`null`、`undefined`、`maybe-null` 等空值状态；
-- `accessPath`：被解引用的局部变量或字段路径；
-- `source`：空值来源位置；
-- `dereference`：解引用位置；
-- `confidence`：报告置信度；
-- `description`：问题摘要。
-
-例如，可以用 Node.js 提取所有解引用位置：
+`--format` 支持 `json`、`text`、`markdown` 和 `html`：
 
 ```bash
-node -e "const r=require('./out/nullness-report.json'); for (const d of r.nullness.diagnostics) console.log(d.dereference.relativePath + ':' + d.dereference.line + ':' + d.dereference.col)"
+npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
+  --format html \
+  --output out/report.html \
+  --detailed
 ```
 
-## 6. 使用编译后的 CLI
+未指定 `--output` 时，报告输出到标准输出。自动化处理和真实项目统计建议使用 JSON；人工审阅可使用 Markdown 或 HTML。
 
-构建项目：
+## 6. 解读 JSON 报告
+
+首先检查以下字段：
+
+| 字段 | 含义 |
+|---|---|
+| `status` | 完整链路是否成功；`failed` 时继续查看 `errors`。 |
+| `settings` | 实际启用的分析器、SDK 和有界参数。 |
+| `settings.boundEnforcement` | 各边界在本次分析中是否真正生效。 |
+| `summary.nullDereferences` | 空指针候选数量。 |
+| `summary.resourceLeaks` | 跨生命周期 IFDS 资源泄漏数量。 |
+| `summary.sources` / `summary.sinks` | 实际扫描到的资源申请/释放调用数量。 |
+| `nullness.diagnostics` | 空值来源、访问路径、解引用位置和置信度。 |
+| `resourceAnalysis.resourceLeaks` | 资源类型、申请位置和期望释放方法。 |
+| `resourceAnalysis.methodLocal` | 方法内资源检测候选及独立统计。 |
+| `warnings` / `errors` | 降级建模、兼容性告警和失败原因。 |
+| `duration` | Scene、生命周期、资源分析和空指针分析耗时。 |
+
+可用 Node.js 快速提取关键结果：
+
+```bash
+node -e "const r=require('./out/report.json'); console.log({status:r.status,nullness:r.summary.nullDereferences,resourceLeaks:r.summary.resourceLeaks,sources:r.summary.sources,sinks:r.summary.sinks})"
+```
+
+方法内资源候选和 IFDS 资源泄漏采用不同分析粒度，数量不要求一致。正式结论应优先结合 `resourceAnalysis.resourceLeaks`、传播上下文和源码人工审核。
+
+## 7. 构建并运行发布产物
 
 ```bash
 npm run build
-```
-
-然后执行：
-
-```bash
 node dist/cli/main.js analyze "/absolute/path/to/HarmonyOSApp" \
   --format json \
-  --output out/nullness-report.json
+  --output out/report.json
 ```
 
-查看完整命令帮助：
+查看所有参数：
 
 ```bash
 node dist/cli/main.js analyze --help
 ```
 
-## 7. 退出码
+## 8. 大型工程与常见问题
 
-| 退出码 | 含义 |
-|---:|---|
-| `0` | Scene、生命周期和启用的空指针分析全部完成。 |
-| `1` | 命令参数、工程路径、SDK 或 Scene/生命周期构建失败。 |
-| `2` | 报告已生成，但空指针分析返回失败状态。 |
+### Node.js 内存不足
 
-检出空指针候选问题本身不会让 CLI 返回非零退出码。
-
-## 8. 常见问题
-
-### 找不到 SDK
-
-确认 `--sdk-root` 下存在 `openharmony/ets` 或 `hms/ets`，或使用 `--sdk` 直接指向 ETS SDK 目录。
-
-### 大型项目内存不足
-
-可以增加 Node.js 堆内存上限：
+大型工程可提高堆内存上限：
 
 ```bash
 NODE_OPTIONS=--max-old-space-size=4096 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
-  --format json --output out/nullness-report.json
+  --format json \
+  --output out/report.json
 ```
 
-### 报告出现 `Skipping ViewTree`
+如果事实规模仍然过大，应先检查报告耗时，再逐步降低 `maxPropagationDepth`、`maxCallbackIterations` 或资源流边界；修改边界会影响覆盖范围，应在报告中保留实际配置。
 
-某个 Component 的 ViewTree 在新版 ArkAnalyzer 中可能因递归泛型无法完整构建。ArkLifeguard 会跳过该 Component 的 ViewTree，继续分析其他生命周期和空指针路径。这是局部降级，可能遗漏该 Component 的 UI 回调路径。
+### ViewTree 无法完整构建
 
-### 报告数为 0
+日志或报告出现 `Skipping ViewTree` 时，工具会跳过对应 Component 的 UI 回调并继续分析。这属于局部降级，可能减少回调路径覆盖。
 
-0 条报告只表示在当前模型和有界参数下未找到候选问题，不等于证明应用中不存在空指针风险。真实项目结果仍需要结合源码进行人工审核。
+### 报告数量为零
 
-## 9. 常用辅助选项
+零报告只表示在当前 IR、规则、生命周期模型和边界内未发现候选问题，不代表应用已经被证明不存在空指针或资源泄漏风险。
 
-- `--report-unresolved-returns`：输出由未解析返回类型导出的低置信度报告；
-- `--no-navigation`：不收集导航关系；
-- `--no-ui-callbacks`：不通过 ViewTree 提取 UI 回调；
-- `--no-infer-types`：跳过类型推断，可能显著影响空指针结果；
-- `--no-nullness`：只生成生命周期结果，不运行空指针分析。
+## 9. 退出码
 
-进行正式空指针检测时，不建议使用后三个关闭选项。
+| 退出码 | 含义 |
+|---:|---|
+| `0` | 完整链路及所有启用的分析模块执行成功。 |
+| `1` | 参数、工程路径、SDK 或 Scene/生命周期构建失败。 |
+| `2` | 报告已经生成，但至少一个启用的分析模块返回失败状态。 |
+
+检出候选问题本身不会让 CLI 返回非零退出码。
