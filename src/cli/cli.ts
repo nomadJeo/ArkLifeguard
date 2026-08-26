@@ -26,6 +26,7 @@ interface AnalyzeCliOptions {
     navigation: boolean;
     uiCallbacks: boolean;
     nullness: boolean;
+    resourceAnalysis: boolean;
     maxCallbackIterations: number;
     maxAbilitiesPerFlow: number;
     maxNavigationHops: number;
@@ -43,10 +44,10 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
     program
         .name(NAME)
         .version(VERSION)
-        .description('HarmonyOS lifecycle and null-pointer static analyzer');
+        .description('HarmonyOS lifecycle, resource-leak and null-pointer static analyzer');
 
     const analyzeCommand = program.command('analyze')
-        .description('Run the complete Scene -> lifecycle -> nullness -> report pipeline')
+        .description('Run the complete Scene -> lifecycle -> resource/nullness -> report pipeline')
         .argument('<project-path>', 'HarmonyOS project directory')
         .option('-o, --output <path>', 'write the report to a file')
         .addOption(new Option('-f, --format <format>', 'report format')
@@ -57,11 +58,12 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
         .option('--no-navigation', 'skip navigation relationship collection')
         .option('--no-ui-callbacks', 'disable ViewTree UI callback extraction')
         .option('--no-nullness', 'build the lifecycle model without running nullness IFDS')
+        .option('--no-resource-analysis', 'disable resource Source/Sink IFDS analysis')
         .option('--max-callback-iterations <n>', 'bounded lifecycle expansion rounds', positiveInteger, 1)
-        .option('--max-abilities-per-flow <n>', 'Ability bound retained in lifecycle analysis config', nonNegativeInteger, 3)
-        .option('--max-navigation-hops <n>', 'navigation-hop bound retained in lifecycle analysis config', nonNegativeInteger, 5)
+        .option('--max-abilities-per-flow <n>', 'maximum Abilities visited by one resource flow', nonNegativeInteger, 3)
+        .option('--max-navigation-hops <n>', 'maximum navigation hops in one resource flow', nonNegativeInteger, 5)
         .option('--max-access-path-length <n>', 'maximum nullness access-path length', positiveInteger, 5)
-        .option('--max-propagation-depth <n>', 'maximum nullness fact propagation depth', positiveInteger, 40)
+        .option('--max-propagation-depth <n>', 'maximum resource/nullness fact propagation depth', positiveInteger, 40)
         .option('--report-unresolved-returns', 'include low-confidence unresolved-return reports', false)
         .option('-d, --detailed', 'include lifecycle and navigation details', false)
         .option('--title <title>', 'custom report title')
@@ -75,6 +77,7 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
                     analyzeNavigation: options.navigation,
                     extractUICallbacks: options.uiCallbacks,
                     runNullness: options.nullness,
+                    runResourceAnalysis: options.resourceAnalysis,
                     maxCallbackIterations: options.maxCallbackIterations,
                     maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
                     maxNavigationHops: options.maxNavigationHops,

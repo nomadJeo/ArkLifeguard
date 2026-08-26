@@ -51,8 +51,8 @@ export class ReportGenerator {
             '',
             '【有界分析配置】',
             `  生命周期展开次数: ${result.settings.bounds.maxCallbackIterations}`,
-            `  Ability 数量上限: ${result.settings.bounds.maxAbilitiesPerFlow} (资源分析禁用时仅保留配置)`,
-            `  导航跳数上限: ${result.settings.bounds.maxNavigationHops} (资源分析禁用时仅保留配置)`,
+            `  Ability 数量上限: ${result.settings.bounds.maxAbilitiesPerFlow} (${result.settings.boundEnforcement.maxAbilitiesPerFlow})`,
+            `  导航跳数上限: ${result.settings.bounds.maxNavigationHops} (${result.settings.boundEnforcement.maxNavigationHops})`,
             `  访问路径长度上限: ${result.settings.bounds.maxAccessPathLength}`,
             `  Fact 传播深度上限: ${result.settings.bounds.maxPropagationDepth}`,
             '',
@@ -63,6 +63,10 @@ export class ReportGenerator {
             `  生命周期方法: ${result.summary.lifecycleMethods}`,
             `  UI 回调 / 导航关系: ${result.summary.uiCallbacks} / ${result.summary.navigations}`,
             `  空指针报告: ${result.summary.nullDereferences}`,
+            `  资源泄漏报告: ${result.summary.resourceLeaks}`,
+            `  通用污点报告: ${result.summary.taintLeaks}`,
+            `  Source / Sink: ${result.summary.sources} / ${result.summary.sinks}`,
+            `  方法内资源候选: ${result.resourceAnalysis.methodLocal.leaks.length}`,
             `  到达语句 / Fact: ${result.summary.reachedStatements} / ${result.summary.reachedFacts}`,
             '',
             '【DummyMain】',
@@ -70,8 +74,19 @@ export class ReportGenerator {
             `  基本块 / 语句: ${result.dummyMain.blocks} / ${result.dummyMain.statements}`,
             `  生命周期调用 / UI 回调: ${result.dummyMain.lifecycleCalls} / ${result.dummyMain.uiCallbackCalls}`,
             '',
-            '【空指针诊断】',
+            '【资源泄漏诊断】',
         ];
+        if (result.resourceAnalysis.resourceLeaks.length === 0) {
+            lines.push('  未检出资源泄漏候选问题。');
+        } else {
+            result.resourceAnalysis.resourceLeaks.forEach((leak, index) => {
+                lines.push(`  ${index + 1}. ${leak.description}`);
+                lines.push(`     类型: ${leak.resourceType}`);
+                lines.push(`     位置: ${this.locationText(leak.source)}`);
+                lines.push(`     期望释放: ${leak.expectedSink}`);
+            });
+        }
+        lines.push('', '【空指针诊断】');
         if (result.nullness.diagnostics.length === 0) {
             lines.push('  未检出空指针候选问题。');
         } else {
@@ -88,6 +103,7 @@ export class ReportGenerator {
         lines.push(`  生命周期: ${result.duration.lifecycleModeling}ms`);
         lines.push(`  导航: ${result.duration.navigationAnalysis}ms`);
         lines.push(`  空指针: ${result.duration.nullnessAnalysis}ms`);
+        lines.push(`  资源分析: ${result.duration.resourceAnalysis}ms`);
         lines.push(`  总耗时: ${result.duration.total}ms`);
         this.appendMessages(lines, result);
         return lines.join('\n');
@@ -108,8 +124,8 @@ export class ReportGenerator {
             '| 参数 | 数值 | 状态 |',
             '|---|---:|---|',
             `| maxCallbackIterations | ${b.maxCallbackIterations} | enforced |`,
-            `| maxAbilitiesPerFlow | ${b.maxAbilitiesPerFlow} | inactive-without-resource-analysis |`,
-            `| maxNavigationHops | ${b.maxNavigationHops} | inactive-without-resource-analysis |`,
+            `| maxAbilitiesPerFlow | ${b.maxAbilitiesPerFlow} | ${result.settings.boundEnforcement.maxAbilitiesPerFlow} |`,
+            `| maxNavigationHops | ${b.maxNavigationHops} | ${result.settings.boundEnforcement.maxNavigationHops} |`,
             `| maxAccessPathLength | ${b.maxAccessPathLength} | enforced |`,
             `| maxPropagationDepth | ${b.maxPropagationDepth} | enforced |`,
             '',
@@ -125,11 +141,26 @@ export class ReportGenerator {
             `| UI 回调 | ${result.summary.uiCallbacks} |`,
             `| 导航关系 | ${result.summary.navigations} |`,
             `| 空指针报告 | ${result.summary.nullDereferences} |`,
+            `| 资源泄漏报告 | ${result.summary.resourceLeaks} |`,
+            `| 通用污点报告 | ${result.summary.taintLeaks} |`,
+            `| Source | ${result.summary.sources} |`,
+            `| Sink | ${result.summary.sinks} |`,
+            `| 方法内资源候选 | ${result.resourceAnalysis.methodLocal.leaks.length} |`,
             `| 总耗时(ms) | ${result.duration.total} |`,
             '',
-            '## 空指针诊断',
+            '## 资源泄漏诊断',
             '',
         ];
+        if (result.resourceAnalysis.resourceLeaks.length === 0) {
+            lines.push('未检出资源泄漏候选问题。');
+        } else {
+            for (const leak of result.resourceAnalysis.resourceLeaks) {
+                lines.push(`- **${leak.resourceType}** ${leak.description}`);
+                lines.push(`  - 位置：\`${this.locationText(leak.source)}\``);
+                lines.push(`  - 期望释放：\`${leak.expectedSink}\``);
+            }
+        }
+        lines.push('', '## 空指针诊断', '');
         if (result.nullness.diagnostics.length === 0) {
             lines.push('未检出空指针候选问题。');
         } else {
@@ -164,6 +195,11 @@ export class ReportGenerator {
             ['UI 回调', result.summary.uiCallbacks],
             ['导航关系', result.summary.navigations],
             ['空指针报告', result.summary.nullDereferences],
+            ['资源泄漏报告', result.summary.resourceLeaks],
+            ['通用污点报告', result.summary.taintLeaks],
+            ['Source', result.summary.sources],
+            ['Sink', result.summary.sinks],
+            ['方法内资源候选', result.resourceAnalysis.methodLocal.leaks.length],
         ].map(([name, value]) => `<tr><th>${name}</th><td>${value}</td></tr>`).join('');
         const b = result.settings.bounds;
         const boundRows = Object.entries(b)
@@ -175,6 +211,13 @@ export class ReportGenerator {
                 <div><code>${this.escape(this.locationText(diagnostic.dereference))}</code></div>
                 <div>访问路径: <code>${this.escape(diagnostic.accessPath)}</code></div>
             </li>`).join('')}</ol>`;
+        const resourceLeaks = result.resourceAnalysis.resourceLeaks.length === 0
+            ? '<p>未检出资源泄漏候选问题。</p>'
+            : `<ol>${result.resourceAnalysis.resourceLeaks.map(leak => `<li>
+                <strong>${this.escape(leak.resourceType)}</strong> ${this.escape(leak.description)}
+                <div><code>${this.escape(this.locationText(leak.source))}</code></div>
+                <div>期望释放: <code>${this.escape(leak.expectedSink)}</code></div>
+            </li>`).join('')}</ol>`;
         return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>${title}</title>
 <style>body{font:14px/1.6 system-ui,sans-serif;max-width:1100px;margin:32px auto;padding:0 20px;color:#202124}h1,h2{color:#16324f}table{border-collapse:collapse;width:100%;margin:12px 0 24px}th,td{border:1px solid #ccd3da;padding:8px;text-align:left}th{background:#f3f6f8}code{background:#f3f6f8;padding:2px 5px}.failed{color:#b42318}.success{color:#067647}</style>
@@ -184,6 +227,7 @@ export class ReportGenerator {
 <h2>有界分析配置</h2><table><tr><th>参数</th><th>数值</th><th>状态</th></tr>${boundRows}</table>
 <h2>结果摘要</h2><table>${summaryRows}</table>
 <h2>DummyMain</h2><p><code>${this.escape(result.dummyMain.methodSignature)}</code></p>
+<h2>资源泄漏诊断</h2>${resourceLeaks}
 <h2>空指针诊断</h2>${diagnostics}
 </body></html>`;
     }

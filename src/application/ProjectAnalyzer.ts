@@ -18,6 +18,11 @@ import {
     NULLNESS_LIFECYCLE_ORDER,
     NullnessAnalysisRunner,
 } from '../analysis/nullness/NullnessAnalysisRunner';
+import {
+    ResourceLeakDetector,
+    SourceSinkLocationScanner,
+    TaintAnalysisRunner,
+} from '../analysis/resource';
 
 export interface ProjectAnalysisOptions {
     sdkRoot?: string;
@@ -26,6 +31,7 @@ export interface ProjectAnalysisOptions {
     extractUICallbacks?: boolean;
     analyzeNavigation?: boolean;
     runNullness?: boolean;
+    runResourceAnalysis?: boolean;
     maxCallbackIterations?: number;
     maxAbilitiesPerFlow?: number;
     maxNavigationHops?: number;
@@ -51,8 +57,45 @@ export interface NullnessDiagnosticRecord {
     dereference: AnalysisLocation;
 }
 
+export interface ResourceLeakRecord {
+    sourceId: string;
+    resourceType: string;
+    expectedSink: string;
+    description: string;
+    source: AnalysisLocation;
+}
+
+export interface TaintLeakRecord {
+    sourceId: string;
+    description: string;
+    source: AnalysisLocation;
+    sink: AnalysisLocation;
+    propagationPath: AnalysisLocation[];
+}
+
+export interface SourceSinkLocationRecord {
+    resourceType: string;
+    methodPattern: string;
+    methodSignature: string;
+    location: AnalysisLocation;
+}
+
+export interface MethodLocalResourceLeakRecord {
+    resourceType: string;
+    sourceMethod: string;
+    className: string;
+    methodName: string;
+    filePath: string;
+    lineNumber: number;
+    expectedSink: string;
+    variableName: string;
+    severity: 'error' | 'warning' | 'info';
+    description: string;
+}
+
 export interface ProjectAnalysisResult {
     schemaVersion: 1;
+    /** 保留既有值以兼容已接入的报告消费者；启用模块以 settings 字段为准。 */
     analysisKind: 'lifecycle-nullness';
     status: 'success' | 'failed';
     project: {
@@ -66,6 +109,7 @@ export interface ProjectAnalysisResult {
         extractUICallbacks: boolean;
         analyzeNavigation: boolean;
         runNullness: boolean;
+        runResourceAnalysis: boolean;
         bounds: {
             maxCallbackIterations: number;
             maxAbilitiesPerFlow: number;
@@ -75,8 +119,8 @@ export interface ProjectAnalysisResult {
         };
         boundEnforcement: {
             maxCallbackIterations: 'enforced';
-            maxAbilitiesPerFlow: 'inactive-without-resource-analysis';
-            maxNavigationHops: 'inactive-without-resource-analysis';
+            maxAbilitiesPerFlow: 'enforced' | 'inactive-without-resource-analysis';
+            maxNavigationHops: 'enforced' | 'inactive-without-resource-analysis';
             maxAccessPathLength: 'enforced';
             maxPropagationDepth: 'enforced';
         };
@@ -93,6 +137,10 @@ export interface ProjectAnalysisResult {
         uiCallbacks: number;
         navigations: number;
         nullDereferences: number;
+        resourceLeaks: number;
+        taintLeaks: number;
+        sources: number;
+        sinks: number;
         reachedStatements: number;
         reachedFacts: number;
     };
@@ -109,11 +157,31 @@ export interface ProjectAnalysisResult {
         reachedFacts: number;
         error?: string;
     };
+    resourceAnalysis: {
+        enabled: boolean;
+        success: boolean;
+        entryMethod: string;
+        resourceLeaks: ResourceLeakRecord[];
+        taintLeaks: TaintLeakRecord[];
+        reachedStatements: number;
+        reachedFacts: number;
+        sources: SourceSinkLocationRecord[];
+        sinks: SourceSinkLocationRecord[];
+        analyzedMethods: number;
+        methodLocal: {
+            leaks: MethodLocalResourceLeakRecord[];
+            analyzedMethods: number;
+            sourceCount: number;
+            sinkCount: number;
+        };
+        error?: string;
+    };
     duration: {
         sceneBuilding: number;
         lifecycleModeling: number;
         navigationAnalysis: number;
         nullnessAnalysis: number;
+        resourceAnalysis: number;
         total: number;
     };
     warnings: string[];
@@ -161,6 +229,7 @@ const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPat
     extractUICallbacks: true,
     analyzeNavigation: true,
     runNullness: true,
+    runResourceAnalysis: true,
     maxCallbackIterations: DEFAULT_LIFECYCLE_CONFIG.bounds.maxCallbackIterations,
     maxAbilitiesPerFlow: DEFAULT_LIFECYCLE_CONFIG.bounds.maxAbilitiesPerFlow,
     maxNavigationHops: DEFAULT_LIFECYCLE_CONFIG.bounds.maxNavigationHops,
@@ -170,7 +239,7 @@ const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPat
     verbose: false,
 };
 
-/** Complete CLI-facing application service for lifecycle and nullness analysis. */
+/** Complete CLI-facing application service for lifecycle, resource and nullness analysis. */
 export class ProjectAnalyzer {
     private readonly options: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPaths'>> &
         Pick<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPaths'>;
@@ -222,6 +291,32 @@ export class ProjectAnalyzer {
             : [];
         const navigationAnalysis = Date.now() - navigationStart;
 
+        const resourceStart = Date.now();
+        let resourceResult: ReturnType<TaintAnalysisRunner['runWithDummyMain']> | null = null;
+        let methodLocalDetector: ResourceLeakDetector | null = null;
+        let methodLocalLeaks: ReturnType<ResourceLeakDetector['detect']> = [];
+        let scannedLocations: ReturnType<SourceSinkLocationScanner['scan']> = {
+            sources: [],
+            sinks: [],
+        };
+        let resourceError: string | undefined;
+        try {
+            if (this.options.runResourceAnalysis) {
+                resourceResult = new TaintAnalysisRunner(scene, {
+                    maxCallbackIterations: this.options.maxCallbackIterations,
+                    maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
+                    maxNavigationHops: this.options.maxNavigationHops,
+                    maxPropagationDepth: this.options.maxPropagationDepth,
+                }).runWithDummyMain(dummyMain, creator.getAbilityMethodSet());
+                methodLocalDetector = new ResourceLeakDetector(scene);
+                methodLocalLeaks = methodLocalDetector.detect();
+                scannedLocations = new SourceSinkLocationScanner(scene).scan();
+            }
+        } catch (error) {
+            resourceError = error instanceof Error ? error.message : String(error);
+        }
+        const resourceAnalysis = Date.now() - resourceStart;
+
         const nullnessStart = Date.now();
         const nullnessResult = this.options.runNullness
             ? new NullnessAnalysisRunner(scene, {
@@ -247,7 +342,53 @@ export class ProjectAnalyzer {
             ? [...nullnessResult.reachedFacts.values()].reduce((sum, facts) => sum + facts.length, 0)
             : 0;
         const nullnessSuccess = nullnessResult?.success ?? !this.options.runNullness;
-        const errors = nullnessSuccess || !nullnessResult?.error ? [] : [nullnessResult.error];
+        const resourceSuccess = !this.options.runResourceAnalysis ||
+            (resourceResult?.success === true && resourceError === undefined);
+        const errors = [
+            ...(!nullnessSuccess && nullnessResult?.error ? [nullnessResult.error] : []),
+            ...(!resourceSuccess && resourceResult?.error ? [resourceResult.error] : []),
+            ...(!resourceSuccess && resourceError ? [resourceError] : []),
+        ];
+        const resourceLeaks = (resourceResult?.resourceLeaks ?? []).map(leak => ({
+            sourceId: leak.source.id,
+            resourceType: leak.resourceType,
+            expectedSink: leak.expectedSink,
+            description: leak.description,
+            source: this.location(
+                resolvedProjectPath,
+                SourceSinkLocationScanner.getLocationForStmt(scene, leak.sourceStmt)
+            ),
+        }));
+        const taintLeaks = (resourceResult?.taintLeaks ?? []).map(leak => ({
+            sourceId: leak.source.id,
+            description: leak.description,
+            source: this.location(
+                resolvedProjectPath,
+                SourceSinkLocationScanner.getLocationForStmt(scene, leak.sourceStmt)
+            ),
+            sink: this.location(
+                resolvedProjectPath,
+                SourceSinkLocationScanner.getLocationForStmt(scene, leak.sinkStmt)
+            ),
+            propagationPath: leak.propagationPath.map(stmt => this.location(
+                resolvedProjectPath,
+                SourceSinkLocationScanner.getLocationForStmt(scene, stmt)
+            )),
+        }));
+        const resourceReachedStatements = resourceResult?.reachedFacts.size ?? 0;
+        const resourceReachedFacts = resourceResult?.statistics.totalFacts ?? 0;
+        const sourceLocations = scannedLocations.sources.map(source => ({
+            resourceType: source.resourceType,
+            methodPattern: source.methodPattern,
+            methodSignature: source.methodSig,
+            location: this.location(resolvedProjectPath, source),
+        }));
+        const sinkLocations = scannedLocations.sinks.map(sink => ({
+            resourceType: sink.resourceType,
+            methodPattern: sink.methodPattern,
+            methodSignature: sink.methodSig,
+            location: this.location(resolvedProjectPath, sink),
+        }));
         const projectFiles = scene.getFiles().filter(file => {
             const filePath = file.getFilePath();
             return filePath.length > 0 &&
@@ -269,6 +410,7 @@ export class ProjectAnalyzer {
                 extractUICallbacks: this.options.extractUICallbacks,
                 analyzeNavigation: this.options.analyzeNavigation,
                 runNullness: this.options.runNullness,
+                runResourceAnalysis: this.options.runResourceAnalysis,
                 bounds: {
                     maxCallbackIterations: this.options.maxCallbackIterations,
                     maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
@@ -278,8 +420,12 @@ export class ProjectAnalyzer {
                 },
                 boundEnforcement: {
                     maxCallbackIterations: 'enforced',
-                    maxAbilitiesPerFlow: 'inactive-without-resource-analysis',
-                    maxNavigationHops: 'inactive-without-resource-analysis',
+                    maxAbilitiesPerFlow: this.options.runResourceAnalysis
+                        ? 'enforced'
+                        : 'inactive-without-resource-analysis',
+                    maxNavigationHops: this.options.runResourceAnalysis
+                        ? 'enforced'
+                        : 'inactive-without-resource-analysis',
                     maxAccessPathLength: 'enforced',
                     maxPropagationDepth: 'enforced',
                 },
@@ -297,6 +443,10 @@ export class ProjectAnalyzer {
                     sum + component.uiCallbacks.length, 0),
                 navigations: navigations.length,
                 nullDereferences: diagnostics.length,
+                resourceLeaks: resourceLeaks.length,
+                taintLeaks: taintLeaks.length,
+                sources: sourceLocations.length,
+                sinks: sinkLocations.length,
                 reachedStatements,
                 reachedFacts,
             },
@@ -313,11 +463,33 @@ export class ProjectAnalyzer {
                 reachedFacts,
                 ...(nullnessResult?.error ? { error: nullnessResult.error } : {}),
             },
+            resourceAnalysis: {
+                enabled: this.options.runResourceAnalysis,
+                success: resourceSuccess,
+                entryMethod: resourceResult?.entryMethod ?? '',
+                resourceLeaks,
+                taintLeaks,
+                reachedStatements: resourceReachedStatements,
+                reachedFacts: resourceReachedFacts,
+                sources: sourceLocations,
+                sinks: sinkLocations,
+                analyzedMethods: resourceResult?.statistics.analyzedMethods ?? 0,
+                methodLocal: {
+                    leaks: methodLocalLeaks,
+                    analyzedMethods: methodLocalDetector?.getAnalyzedMethodCount() ?? 0,
+                    sourceCount: methodLocalDetector?.getSourceCount() ?? 0,
+                    sinkCount: methodLocalDetector?.getSinkCount() ?? 0,
+                },
+                ...((resourceResult?.error ?? resourceError)
+                    ? { error: resourceResult?.error ?? resourceError }
+                    : {}),
+            },
             duration: {
                 sceneBuilding,
                 lifecycleModeling,
                 navigationAnalysis,
                 nullnessAnalysis,
+                resourceAnalysis,
                 total: Date.now() - totalStart,
             },
             warnings: [...this.warnings],

@@ -3,4 +3,5 @@ export * from './report';
 export * from './cli';
 export * from './lifecycle';
 export * from './analysis/nullness';
+export * from './analysis/resource';
 export * from './ifds';

@@ -26,3 +26,15 @@ export function buildLifecycleScene(projectName: string): Scene {
     scene.inferTypes();
     return scene;
 }
+
+export function buildResourceScene(projectName: string): Scene {
+    const projectPath = fixturePath('resource', projectName);
+    const config = new SceneConfig();
+    config.buildConfig(projectPath, projectPath, [sdk]);
+    config.buildFromProjectDir(projectPath);
+
+    const scene = new Scene();
+    scene.buildSceneFromProjectDir(config);
+    scene.inferTypes();
+    return scene;
+}

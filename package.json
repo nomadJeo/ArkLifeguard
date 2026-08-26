@@ -19,6 +19,7 @@
     "test:ifds": "vitest run test/ifds",
     "test:cli": "vitest run test/application test/report test/cli",
     "test:nullness": "vitest run test/nullness --exclude test/nullness/NullnessArkDefectBench.test.ts",
+    "test:resource": "vitest run test/resource",
     "test:nullness:ir": "vitest run test/nullness/ArkTSNullSafetyIR.test.ts",
     "test:nullness:bench": "vite-node scripts/test-nullness-bench.ts",
     "test:nullness:real-apps": "vite-node scripts/test-nullness-real-apps.ts",

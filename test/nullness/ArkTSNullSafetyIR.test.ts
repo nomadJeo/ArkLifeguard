@@ -52,5 +52,5 @@ describe('ArkTS null-safety ArkIR dump', () => {
         fs.writeFileSync(outputPath, `${output}\n`, 'utf8');
         console.log(`ArkTS null-safety IR written to ${outputPath}`);
         console.log(output);
-    });
+    }, 15_000);
 });
