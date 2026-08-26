@@ -109,7 +109,70 @@ ArkLifeguard/
 | `npm run test:resource` | 运行资源分析测试。 |
 | `npm run test:nullness` | 运行空指针分析测试。 |
 | `npm run test:cli` | 运行应用层、报告和 CLI 测试。 |
+| `npm run test:nullness:bench` | 在 ArkDefectBench 上评估空指针诊断。 |
+| `npm run test:nullness:real-apps` | 对真实应用执行空指针分析。 |
+| `npm run test:resource:real-apps` | 对真实应用执行资源泄漏分析。 |
 | `npm run build` | 生成 `dist/` 发布产物。 |
+
+## Bench 与真实应用测试
+
+### 空指针 Bench
+
+`test:nullness:bench` 使用 `ArkDefectBench/Null Pointer Dereference/null_pointer_expected.json` 中的标注运行空指针测试，并汇总每个用例的 TP、FP、TN、FN，以及整体 Recall 和 Accuracy：
+
+```bash
+# 运行全部 Bench 用例
+npm run test:nullness:bench
+
+# 只运行一个用例；支持完整 id 或末尾用例名
+npm run test:nullness:bench -- --case DirectNull
+```
+
+Bench 用于衡量已有标注上的诊断精度，不生成持久化报告。存在 FP、FN、超时或执行错误时命令返回非零状态。`--` 用于把后面的参数传递给测试脚本。
+
+### 真实应用测试
+
+真实应用脚本从 `HarmonyRealApps/meta.json` 读取工程清单。可以先查看可用项目：
+
+```bash
+npm run test:nullness:real-apps -- --list
+npm run test:resource:real-apps -- --list
+```
+
+建议先选择单个项目或使用 `--limit` 小批量运行，并显式保存 JSON 报告：
+
+```bash
+# 单个项目的空指针分析；默认每个项目限时 600 秒
+npm run test:nullness:real-apps -- \
+  --project AnimeZ \
+  --timeout-ms 600000 \
+  --output out/nullness-real-apps.json
+
+# 前 5 个项目的资源泄漏分析；默认每个项目硬限时 180 秒
+npm run test:resource:real-apps -- \
+  --limit 5 \
+  --timeout-ms 180000 \
+  --output out/resource-real-apps.json
+```
+
+`--project` 可以重复传入；未指定 `--project` 和 `--limit` 时会分析清单中的全部项目。两个脚本都将每个工程放在独立进程中运行，逐项目记录成功、失败、超时、耗时和峰值内存，并增量写入报告；只要存在失败或超时，最终命令就返回非零状态。
+
+常用参数如下：
+
+| 参数 | 空指针真实应用 | 资源泄漏真实应用 | 作用 |
+|---|---:|---:|---|
+| `--project <name>` | 支持 | 支持 | 选择一个项目，可重复使用。 |
+| `--limit <n>` | 支持 | 支持 | 只分析所选清单的前 n 个项目。 |
+| `--output <file>` | 支持 | 支持 | 保存增量 JSON 报告。 |
+| `--timeout-ms <n>` | 默认 600000 | 默认 180000 | 单项目硬超时。 |
+| `--sdk-root <path>` | 支持 | 支持 | 指定 ETS SDK 根目录。 |
+| `--callback-iterations <n>` | 默认 1 | 默认 1 | 生命周期回调展开轮数。 |
+| `--max-access-path-length <n>` | 默认 5 | 不适用 | 空指针访问路径长度上限。 |
+| `--max-abilities-per-flow <n>` | 不适用 | 默认 3 | 单条资源流的 Ability 上限。 |
+| `--max-navigation-hops <n>` | 不适用 | 默认 5 | 单条资源流的导航跳数上限。 |
+| `--max-propagation-depth <n>` | 默认 40 | 默认 40 | Fact 传播深度上限。 |
+
+真实应用集合的下载、版本固定和 `meta.json` 维护方式见 [HarmonyRealApps/README.md](./HarmonyRealApps/README.md)。完整参数可使用对应命令的 `--help` 查看。
 
 ## 使用边界
 
