@@ -298,14 +298,32 @@ export abstract class DataflowSolver<D> {
                     callEdgePoint,
                     returnSitePoint
                 )) continue;
-                const startOfCaller = this.getStartOfCallerMethod(callEdgePoint.node);
-                if (callerEdge.edgeStart.node === startOfCaller) {
-                    this.propagate(new PathEdge<D>(
-                        callerEdge.edgeStart,
-                        returnSitePoint
-                    ));
-                }
+                this.applySummaryToIncomingCallers(
+                    callerEdges,
+                    callEdgePoint,
+                    returnSitePoint
+                );
             }
+        }
+    }
+
+    protected applySummaryToIncomingCallers(
+        callerEdges: ReadonlySet<PathEdge<D>>,
+        callEdgePoint: PathEdgePoint<D>,
+        returnSitePoint: PathEdgePoint<D>
+    ): void {
+        const startOfCaller = this.getStartOfCallerMethod(callEdgePoint.node);
+        for (const callerEdge of callerEdges) {
+            if (callerEdge.edgeEnd.node !== callEdgePoint.node ||
+                !this.problem.factEqual(
+                    callerEdge.edgeEnd.fact,
+                    callEdgePoint.fact
+                )) continue;
+            if (callerEdge.edgeStart.node !== startOfCaller) continue;
+            this.propagate(new PathEdge<D>(
+                callerEdge.edgeStart,
+                returnSitePoint
+            ));
         }
     }
 

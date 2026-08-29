@@ -84,6 +84,36 @@ class IdentitySolver extends DataflowSolver<string> {
     }
 }
 
+class SummaryPropagationSolver extends IdentitySolver {
+    constructor(
+        problem: IdentityProblem,
+        scene: Scene,
+        private readonly returnSite: Stmt,
+        private readonly callerEntry: Stmt
+    ) {
+        super(problem, scene);
+    }
+
+    addIncomingForTest(
+        calleeEntry: PathEdgePoint<string>,
+        callerEdge: PathEdge<string>
+    ): void {
+        this.summaryStore.addIncoming(calleeEntry, callerEdge);
+    }
+
+    processExitForTest(edge: PathEdge<string>): void {
+        this.processExitNode(edge);
+    }
+
+    protected getReturnSiteOfCall(): Stmt {
+        return this.returnSite;
+    }
+
+    protected getStartOfCallerMethod(): Stmt {
+        return this.callerEntry;
+    }
+}
+
 interface SemanticFact {
     value: string;
 }
@@ -237,6 +267,39 @@ describe('IFDS migration smoke tests', () => {
             new Scene()
         );
         expect(solver.getStatistics()).toBeUndefined();
+    });
+
+    it('applies a new summary to every existing caller context', () => {
+        const callerEntry = {} as Stmt;
+        const callSite = {} as Stmt;
+        const calleeEntry = {} as Stmt;
+        const exit = {} as Stmt;
+        const returnSite = {} as Stmt;
+        const problem = new IdentityProblem(callerEntry, {} as ArkMethod);
+        const solver = new SummaryPropagationSolver(
+            problem,
+            new Scene(),
+            returnSite,
+            callerEntry
+        );
+        const calleeStart = new PathEdgePoint(calleeEntry, 'CALLEE_INPUT');
+        const callerEdge = (context: string): PathEdge<string> => new PathEdge(
+            new PathEdgePoint(callerEntry, context),
+            new PathEdgePoint(callSite, 'CALL_INPUT')
+        );
+
+        solver.addIncomingForTest(calleeStart, callerEdge('CONTEXT_1'));
+        solver.addIncomingForTest(calleeStart, callerEdge('CONTEXT_2'));
+        solver.processExitForTest(new PathEdge(
+            calleeStart,
+            new PathEdgePoint(exit, 'RETURN_FACT')
+        ));
+
+        const returnedContexts = [...solver.getPathEdgeSet()]
+            .filter(edge => edge.edgeEnd.node === returnSite)
+            .map(edge => edge.edgeStart.fact)
+            .sort();
+        expect(returnedContexts).toEqual(['CONTEXT_1', 'CONTEXT_2']);
     });
 
     it('deduplicates semantic facts and resolves hash collisions in the bucket', () => {

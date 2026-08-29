@@ -110,10 +110,11 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
                 if (!this.summaryStore.addCallSummary(callEdgePoint, returnSitePoint)) {
                     continue;
                 }
-                const startOfCaller = this.getStartOfCallerMethod(callEdgePoint.node);
-                if (callerEdge.edgeStart.node === startOfCaller) {
-                    this.propagate(new PathEdge(callerEdge.edgeStart, returnSitePoint));
-                }
+                this.applySummaryToIncomingCallers(
+                    callerEdges,
+                    callEdgePoint,
+                    returnSitePoint
+                );
             }
         }
     }
