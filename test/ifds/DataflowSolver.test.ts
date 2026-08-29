@@ -157,6 +157,8 @@ describe('IFDS migration smoke tests', () => {
             uniqueEdgesEnqueued: 4,
             duplicateEdgesSkipped: 1,
             deferredDuplicateEdgesSkipped: 1,
+            deduplicationLookups: 5,
+            deduplicationCandidateChecks: 10,
             immediateEnqueued: 2,
             deferredEnqueued: 2,
             maxCombinedQueueSize: 4,

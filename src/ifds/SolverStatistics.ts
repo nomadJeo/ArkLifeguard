@@ -11,6 +11,10 @@ export interface IFDSSolverStatistics {
     uniqueEdgesEnqueued: number;
     duplicateEdgesSkipped: number;
     deferredDuplicateEdgesSkipped: number;
+    deduplicationLookups: number;
+    deduplicationCandidateChecks: number;
+    maxDeduplicationCandidates: number;
+    factEqualityChecks: number;
     processedEdges: number;
     immediateEnqueued: number;
     deferredEnqueued: number;
@@ -33,6 +37,10 @@ export function createSolverStatistics(
         uniqueEdgesEnqueued: 0,
         duplicateEdgesSkipped: 0,
         deferredDuplicateEdgesSkipped: 0,
+        deduplicationLookups: 0,
+        deduplicationCandidateChecks: 0,
+        maxDeduplicationCandidates: 0,
+        factEqualityChecks: 0,
         processedEdges: 0,
         immediateEnqueued: 0,
         deferredEnqueued: 0,

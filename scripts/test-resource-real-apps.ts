@@ -105,6 +105,10 @@ interface RealAppsReport {
             uniqueEdgesEnqueued: number;
             duplicateEdgesSkipped: number;
             deferredDuplicateEdgesSkipped: number;
+            deduplicationLookups: number;
+            deduplicationCandidateChecks: number;
+            maxDeduplicationCandidates: number;
+            factEqualityChecks: number;
             processedEdges: number;
             maxCombinedQueueSize: number;
             maxLaterEdgesSize: number;
@@ -434,6 +438,14 @@ function updateSummary(report: RealAppsReport): void {
                     sum + (item.solverStatistics?.duplicateEdgesSkipped ?? 0), 0),
                 deferredDuplicateEdgesSkipped: successful.reduce((sum, item) =>
                     sum + (item.solverStatistics?.deferredDuplicateEdgesSkipped ?? 0), 0),
+                deduplicationLookups: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.deduplicationLookups ?? 0), 0),
+                deduplicationCandidateChecks: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.deduplicationCandidateChecks ?? 0), 0),
+                maxDeduplicationCandidates: successful.reduce((max, item) =>
+                    Math.max(max, item.solverStatistics?.maxDeduplicationCandidates ?? 0), 0),
+                factEqualityChecks: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.factEqualityChecks ?? 0), 0),
                 processedEdges: successful.reduce((sum, item) =>
                     sum + (item.solverStatistics?.processedEdges ?? 0), 0),
                 maxCombinedQueueSize: successful.reduce((max, item) =>

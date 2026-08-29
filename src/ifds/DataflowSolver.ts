@@ -199,18 +199,38 @@ export abstract class DataflowSolver<D> {
     }
 
     protected pathEdgeSetHasEdge(edge: PathEdge<D>): boolean {
+        let candidateChecks = 0;
+        let factEqualityChecks = 0;
         for (const path of this.pathEdgeSet) {
+            candidateChecks++;
+            factEqualityChecks++;
             this.problem.factEqual(path.edgeEnd.fact, edge.edgeEnd.fact);
-            if (
-                path.edgeEnd.node === edge.edgeEnd.node &&
-                this.problem.factEqual(path.edgeEnd.fact, edge.edgeEnd.fact) &&
-                path.edgeStart.node === edge.edgeStart.node &&
-                this.problem.factEqual(path.edgeStart.fact, edge.edgeStart.fact)
-            ) {
+            if (path.edgeEnd.node !== edge.edgeEnd.node) continue;
+            factEqualityChecks++;
+            if (!this.problem.factEqual(path.edgeEnd.fact, edge.edgeEnd.fact)) continue;
+            if (path.edgeStart.node !== edge.edgeStart.node) continue;
+            factEqualityChecks++;
+            if (this.problem.factEqual(path.edgeStart.fact, edge.edgeStart.fact)) {
+                this.recordDeduplicationLookup(candidateChecks, factEqualityChecks);
                 return true;
             }
         }
+        this.recordDeduplicationLookup(candidateChecks, factEqualityChecks);
         return false;
+    }
+
+    private recordDeduplicationLookup(
+        candidateChecks: number,
+        factEqualityChecks: number
+    ): void {
+        if (!this.statistics) return;
+        this.statistics.deduplicationLookups++;
+        this.statistics.deduplicationCandidateChecks += candidateChecks;
+        this.statistics.factEqualityChecks += factEqualityChecks;
+        this.statistics.maxDeduplicationCandidates = Math.max(
+            this.statistics.maxDeduplicationCandidates,
+            candidateChecks
+        );
     }
 
     /** Normalize or reject an edge before semantic deduplication and scheduling. */
