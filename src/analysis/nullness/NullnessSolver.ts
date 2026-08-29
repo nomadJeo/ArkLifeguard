@@ -27,16 +27,6 @@ import { NullnessFact } from './NullnessFact';
 import { NullnessProblem } from './NullnessProblem';
 import { resolveProjectMethods } from './ProjectMethodResolver';
 
-interface PointIndexEntry<T> {
-    point: PathEdgePoint<NullnessFact>;
-    value: T;
-}
-
-interface SummaryCacheEntry {
-    point: PathEdgePoint<NullnessFact>;
-    byReturnSite: Map<Stmt, PathEdgePoint<NullnessFact>[]>;
-}
-
 export interface NullnessSolverRoot {
     entryPoint: Stmt;
     entryMethod: ArkMethod;
@@ -44,16 +34,6 @@ export interface NullnessSolverRoot {
 
 /** Thin typed facade over ArkAnalyzer's generic IFDS solver. */
 export class NullnessSolver extends DataflowSolver<NullnessFact> {
-    private readonly incomingIndex = new Map<
-        string,
-        PointIndexEntry<Set<PathEdge<NullnessFact>>>[]
-    >();
-    private readonly endSummaryIndex = new Map<
-        string,
-        PointIndexEntry<Set<PathEdgePoint<NullnessFact>>>[]
-    >();
-    /** Summaries are keyed by semantic call point, not PathEdgePoint identity. */
-    private readonly summaryCache = new Map<string, SummaryCacheEntry[]>();
     /** Callee resolution depends on the invoke statement, never on the input fact. */
     private readonly calleeCache = new Map<ArkInvokeStmt, Set<ArkMethod>>();
     private readonly recursiveMethods: Set<ArkMethod>;
@@ -78,9 +58,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     }
 
     protected init(): void {
-        this.incomingIndex.clear();
-        this.endSummaryIndex.clear();
-        this.summaryCache.clear();
         this.calleeCache.clear();
         super.init();
         for (const root of this.additionalRoots) {
@@ -104,13 +81,9 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     protected processExitNode(edge: PathEdge<NullnessFact>): void {
         const startEdgePoint = edge.edgeStart;
         const exitEdgePoint = edge.edgeEnd;
-        this.getOrCreatePointValue(
-            this.endSummaryIndex,
-            startEdgePoint,
-            () => new Set<PathEdgePoint<NullnessFact>>()
-        ).add(exitEdgePoint);
+        this.summaryStore.addEndSummary(startEdgePoint, exitEdgePoint);
 
-        const callerEdges = this.findPointValue(this.incomingIndex, startEdgePoint);
+        const callerEdges = this.summaryStore.getIncoming(startEdgePoint);
         if (!callerEdges) {
             if (this.rootMethods.has(
                 startEdgePoint.node.getCfg()!.getDeclaringMethod()
@@ -134,7 +107,7 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
             );
             for (const fact of returnFlow.getDataFacts(exitEdgePoint.fact)) {
                 const returnSitePoint = new PathEdgePoint(returnSite, fact);
-                if (!this.addSummaryPoint(callEdgePoint, returnSitePoint)) {
+                if (!this.summaryStore.addCallSummary(callEdgePoint, returnSitePoint)) {
                     continue;
                 }
                 const startOfCaller = this.getStartOfCallerMethod(callEdgePoint.node);
@@ -171,7 +144,10 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         for (const fact of callToReturnFlow.getDataFacts(callEdgePoint.fact)) {
             this.propagate(new PathEdge(start, new PathEdgePoint(returnSite, fact)));
         }
-        for (const summaryPoint of this.getSummaryPoints(callEdgePoint, returnSite)) {
+        for (const summaryPoint of this.summaryStore.getCallSummaries(
+            callEdgePoint,
+            returnSite
+        )) {
             this.propagate(new PathEdge(start, summaryPoint));
         }
     }
@@ -189,21 +165,16 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
             this.abstractPointFact(rawStartPoint, true)
         );
         this.propagate(new PathEdge(startEdgePoint, startEdgePoint));
-        this.getOrCreatePointValue(
-            this.incomingIndex,
-            startEdgePoint,
-            () => new Set<PathEdge<NullnessFact>>()
-        ).add(edge);
+        this.summaryStore.addIncoming(startEdgePoint, edge);
 
-        const exitEdgePoints = this.findPointValue(this.endSummaryIndex, startEdgePoint);
-        for (const exitEdgePoint of exitEdgePoints ?? []) {
+        for (const exitEdgePoint of this.summaryStore.getEndSummaries(startEdgePoint)) {
             const returnFlow = this.problem.getExitToReturnFlowFunction(
                 exitEdgePoint.node,
                 returnSite,
                 callEdgePoint.node
             );
             for (const returnFact of returnFlow.getDataFacts(exitEdgePoint.fact)) {
-                this.addSummaryPoint(
+                this.summaryStore.addCallSummary(
                     callEdgePoint,
                     new PathEdgePoint(returnSite, returnFact)
                 );
@@ -214,7 +185,7 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     getReachedFacts(): Map<Stmt, NullnessFact[]> {
         const reached = new Map<Stmt, NullnessFact[]>();
         const reachedIndex = new Map<Stmt, Map<number, NullnessFact[]>>();
-        for (const edge of this.pathEdgeSet) {
+        for (const edge of this.pathEdgeStore.values()) {
             const stmt = edge.edgeEnd.node;
             const fact = edge.edgeEnd.fact;
             const facts = reached.get(stmt) ?? [];
@@ -349,71 +320,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
             if (!indices.has(method)) visit(method);
         }
         return recursive;
-    }
-
-    private pointHashKey(point: PathEdgePoint<NullnessFact>): string {
-        return `${this.statementId(point.node)}:${this.problem.factHash(point.fact)}`;
-    }
-
-    private findPointValue<T>(
-        index: Map<string, PointIndexEntry<T>[]>,
-        point: PathEdgePoint<NullnessFact>
-    ): T | undefined {
-        const bucket = index.get(this.pointHashKey(point));
-        return bucket?.find(entry => this.pointsEqual(entry.point, point))?.value;
-    }
-
-    private getOrCreatePointValue<T>(
-        index: Map<string, PointIndexEntry<T>[]>,
-        point: PathEdgePoint<NullnessFact>,
-        create: () => T
-    ): T {
-        const key = this.pointHashKey(point);
-        const bucket = index.get(key);
-        const existing = bucket?.find(entry => this.pointsEqual(entry.point, point));
-        if (existing) return existing.value;
-        const value = create();
-        const entry = { point, value };
-        if (bucket) {
-            bucket.push(entry);
-        } else {
-            index.set(key, [entry]);
-        }
-        return value;
-    }
-
-    private addSummaryPoint(
-        callEdgePoint: PathEdgePoint<NullnessFact>,
-        summaryPoint: PathEdgePoint<NullnessFact>
-    ): boolean {
-        const key = this.pointHashKey(callEdgePoint);
-        let bucket = this.summaryCache.get(key);
-        let entry = bucket?.find(candidate => this.pointsEqual(candidate.point, callEdgePoint));
-        if (!entry) {
-            entry = { point: callEdgePoint, byReturnSite: new Map() };
-            if (bucket) {
-                bucket.push(entry);
-            } else {
-                this.summaryCache.set(key, [entry]);
-            }
-        }
-        const summaries = entry.byReturnSite.get(summaryPoint.node) ?? [];
-        if (summaries.some(existing =>
-            this.problem.factEqual(existing.fact, summaryPoint.fact))) {
-            return false;
-        }
-        summaries.push(summaryPoint);
-        entry.byReturnSite.set(summaryPoint.node, summaries);
-        return true;
-    }
-
-    private getSummaryPoints(
-        callEdgePoint: PathEdgePoint<NullnessFact>,
-        returnSite: Stmt
-    ): readonly PathEdgePoint<NullnessFact>[] {
-        const bucket = this.summaryCache.get(this.pointHashKey(callEdgePoint));
-        const entry = bucket?.find(candidate => this.pointsEqual(candidate.point, callEdgePoint));
-        return entry?.byReturnSite.get(returnSite) ?? [];
     }
 
     private getCallees(invokeStmt: ArkInvokeStmt): Set<ArkMethod> {

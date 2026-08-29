@@ -84,7 +84,7 @@ export class TaintAnalysisSolver extends DataflowSolver<TaintFact> {
     getReachedFacts(): Map<Stmt, Set<TaintFact>> {
         const result = new Map<Stmt, Set<TaintFact>>();
         
-        for (const pathEdge of this.pathEdgeSet) {
+        for (const pathEdge of this.pathEdgeStore.values()) {
             const stmt = pathEdge.edgeEnd.node;
             const fact = pathEdge.edgeEnd.fact;
             

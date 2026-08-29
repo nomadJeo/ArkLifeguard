@@ -3,4 +3,8 @@ export type { FlowFunction } from './DataflowProblem';
 export { DataflowSolver } from './DataflowSolver';
 export type { DataflowSolverOptions, IFDSSolverStatistics } from './SolverStatistics';
 export { PathEdge, PathEdgePoint } from './Edge';
+export type { FactSemantics } from './FactSemantics';
+export { PathEdgeStore } from './PathEdgeStore';
+export type { PathEdgeInsertResult } from './PathEdgeStore';
+export { SummaryStore } from './SummaryStore';
 export { getRecallMethodInParam } from './CallResolver';

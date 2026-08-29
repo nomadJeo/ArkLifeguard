@@ -28,8 +28,10 @@ import {
     Stmt,
 } from '../adapter/arkanalyzer';
 import { getRecallMethodInParam } from './CallResolver';
-import { DataflowProblem, FlowFunction } from './DataflowProblem';
+import { DataflowProblem } from './DataflowProblem';
 import { PathEdge, PathEdgePoint } from './Edge';
+import { PathEdgeStore } from './PathEdgeStore';
+import { SummaryStore } from './SummaryStore';
 import {
     createSolverStatistics,
     DataflowSolverOptions,
@@ -40,28 +42,18 @@ import {
  * This program is roughly an implementation of the paper:
  * Practical Extensions to the IFDS Algorithm.
  */
-type CallToReturnCacheEdge<D> = PathEdge<D>;
-type PathEdgeFactIndex<D> = Map<number, PathEdge<D>[]>;
-type PathEdgeEndFactIndex<D> = Map<number, PathEdgeFactIndex<D>>;
-type PathEdgeNodeIndex<D> = Map<Stmt, PathEdgeEndFactIndex<D>>;
-
 export abstract class DataflowSolver<D> {
     protected problem: DataflowProblem<D>;
-    protected pathEdgeSet: Set<PathEdge<D>>;
     protected zeroFact: D;
-    protected inComing: Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>;
-    protected endSummary: Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>;
-    protected summaryEdge: Set<CallToReturnCacheEdge<D>>;
     protected scene: Scene;
     protected CHA!: ClassHierarchyAnalysis;
     protected stmtNexts: Map<Stmt, Set<Stmt>>;
+    protected readonly pathEdgeStore: PathEdgeStore<D>;
+    protected readonly summaryStore: SummaryStore<D>;
     private immediateWorkList: Array<PathEdge<D>>;
     private immediateWorkListHead = 0;
     private deferredWorkList: Array<PathEdge<D>>;
     private readonly statistics?: IFDSSolverStatistics;
-    private readonly pathEdgeIndex = new Map<Stmt, PathEdgeNodeIndex<D>>();
-    private readonly statementIds = new WeakMap<Stmt, number>();
-    private nextStatementId = 1;
 
     constructor(
         problem: DataflowProblem<D>,
@@ -73,10 +65,8 @@ export abstract class DataflowSolver<D> {
         this.zeroFact = problem.createZeroValue();
         this.immediateWorkList = [];
         this.deferredWorkList = [];
-        this.pathEdgeSet = new Set<PathEdge<D>>();
-        this.inComing = new Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>();
-        this.endSummary = new Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>();
-        this.summaryEdge = new Set<CallToReturnCacheEdge<D>>();
+        this.pathEdgeStore = new PathEdgeStore(problem);
+        this.summaryStore = new SummaryStore(problem);
         this.stmtNexts = new Map();
         if (options.collectStatistics) {
             this.statistics = createSolverStatistics('two-tier-control-flow');
@@ -89,18 +79,12 @@ export abstract class DataflowSolver<D> {
         this.doSolve();
         if (this.statistics) {
             this.statistics.solveTimeMs = Date.now() - startTime;
-            this.statistics.finalPathEdgeCount = this.pathEdgeSet.size;
+            this.statistics.finalPathEdgeCount = this.pathEdgeStore.size;
         }
     }
 
     protected computeResult(stmt: Stmt, d: D): boolean {
-        for (const pathEdge of this.pathEdgeSet) {
-            if (pathEdge.edgeEnd.node === stmt &&
-                this.problem.factEqual(pathEdge.edgeEnd.fact, d)) {
-                return true;
-            }
-        }
-        return false;
+        return this.pathEdgeStore.containsEndPoint(stmt, d);
     }
 
     protected getChildren(stmt: Stmt): Stmt[] {
@@ -108,6 +92,7 @@ export abstract class DataflowSolver<D> {
     }
 
     protected init(): void {
+        this.summaryStore.clear();
         const edgePoint = new PathEdgePoint<D>(this.problem.getEntryPoint(), this.zeroFact);
         const edge = new PathEdge<D>(edgePoint, edgePoint);
         this.propagate(edge);
@@ -205,81 +190,6 @@ export abstract class DataflowSolver<D> {
         return cfg.getStartingBlock()!.getStmts()[paraNum];
     }
 
-    protected pathEdgeSetHasEdge(edge: PathEdge<D>): boolean {
-        let candidateChecks = 0;
-        let factEqualityChecks = 0;
-        const bucket = this.getPathEdgeBucket(edge, false);
-        for (const path of bucket ?? []) {
-            candidateChecks++;
-            if (path.edgeEnd.node !== edge.edgeEnd.node) continue;
-            if (path.edgeStart.node !== edge.edgeStart.node) continue;
-            factEqualityChecks++;
-            if (!this.problem.factEqual(path.edgeEnd.fact, edge.edgeEnd.fact)) continue;
-            factEqualityChecks++;
-            if (this.problem.factEqual(path.edgeStart.fact, edge.edgeStart.fact)) {
-                this.recordDeduplicationLookup(candidateChecks, factEqualityChecks);
-                return true;
-            }
-        }
-        this.recordDeduplicationLookup(candidateChecks, factEqualityChecks);
-        return false;
-    }
-
-    private addPathEdgeToIndex(edge: PathEdge<D>): void {
-        this.getPathEdgeBucket(edge, true)!.push(edge);
-    }
-
-    private getPathEdgeBucket(
-        edge: PathEdge<D>,
-        create: boolean
-    ): PathEdge<D>[] | undefined {
-        let byEndNode = this.pathEdgeIndex.get(edge.edgeStart.node);
-        if (!byEndNode) {
-            if (!create) return undefined;
-            byEndNode = new Map();
-            this.pathEdgeIndex.set(edge.edgeStart.node, byEndNode);
-        }
-
-        let byStartFact = byEndNode.get(edge.edgeEnd.node);
-        if (!byStartFact) {
-            if (!create) return undefined;
-            byStartFact = new Map();
-            byEndNode.set(edge.edgeEnd.node, byStartFact);
-        }
-
-        const startHash = this.problem.factHash(edge.edgeStart.fact);
-        let byEndFact = byStartFact.get(startHash);
-        if (!byEndFact) {
-            if (!create) return undefined;
-            byEndFact = new Map();
-            byStartFact.set(startHash, byEndFact);
-        }
-
-        const endHash = this.problem.factHash(edge.edgeEnd.fact);
-        let bucket = byEndFact.get(endHash);
-        if (!bucket && create) {
-            bucket = [];
-            byEndFact.set(endHash, bucket);
-        }
-        return bucket;
-    }
-
-    protected statementId(stmt: Stmt): number {
-        const existing = this.statementIds.get(stmt);
-        if (existing !== undefined) return existing;
-        const id = this.nextStatementId++;
-        this.statementIds.set(stmt, id);
-        return id;
-    }
-
-    protected pointsEqual(
-        left: PathEdgePoint<D>,
-        right: PathEdgePoint<D>
-    ): boolean {
-        return left.node === right.node &&
-            this.problem.factEqual(left.fact, right.fact);
-    }
-
     private recordDeduplicationLookup(
         candidateChecks: number,
         factEqualityChecks: number
@@ -310,7 +220,12 @@ export abstract class DataflowSolver<D> {
         }
         const prepared = this.prepareEdgeForPropagation(edge);
         if (!prepared) return false;
-        if (this.pathEdgeSetHasEdge(prepared)) {
+        const insertion = this.pathEdgeStore.addIfAbsent(prepared);
+        this.recordDeduplicationLookup(
+            insertion.candidateChecks,
+            insertion.factEqualityChecks
+        );
+        if (!insertion.inserted) {
             if (this.statistics) {
                 this.statistics.duplicateEdgesSkipped++;
                 if (deferred) this.statistics.deferredDuplicateEdgesSkipped++;
@@ -318,8 +233,6 @@ export abstract class DataflowSolver<D> {
             return false;
         }
 
-        this.pathEdgeSet.add(prepared);
-        this.addPathEdgeToIndex(prepared);
         if (deferred) {
             this.deferredWorkList.push(prepared);
         } else {
@@ -358,14 +271,9 @@ export abstract class DataflowSolver<D> {
     protected processExitNode(edge: PathEdge<D>): void {
         const startEdgePoint = edge.edgeStart;
         const exitEdgePoint = edge.edgeEnd;
-        const summary = this.endSummary.get(startEdgePoint);
-        if (summary === undefined) {
-            this.endSummary.set(startEdgePoint, new Set([exitEdgePoint]));
-        } else {
-            summary.add(exitEdgePoint);
-        }
-        const callEdgePoints = this.inComing.get(startEdgePoint);
-        if (callEdgePoints === undefined) {
+        this.summaryStore.addEndSummary(startEdgePoint, exitEdgePoint);
+        const callerEdges = this.summaryStore.getIncoming(startEdgePoint);
+        if (callerEdges === undefined) {
             if (startEdgePoint.node.getCfg()!.getDeclaringMethod() ===
                 this.problem.getEntryMethod()) {
                 return;
@@ -375,7 +283,8 @@ export abstract class DataflowSolver<D> {
                 startEdgePoint.node.getCfg()?.getDeclaringMethod().toString()
             );
         }
-        for (const callEdgePoint of callEdgePoints) {
+        for (const callerEdge of callerEdges) {
+            const callEdgePoint = callerEdge.edgeEnd;
             const returnSite = this.getReturnSiteOfCall(callEdgePoint.node);
             if (!returnSite) continue;
             const returnFlowFunc = this.problem.getExitToReturnFlowFunction(
@@ -383,37 +292,18 @@ export abstract class DataflowSolver<D> {
                 returnSite,
                 callEdgePoint.node
             );
-            this.handleFacts(returnFlowFunc, returnSite, exitEdgePoint, callEdgePoint);
-        }
-    }
-
-    private handleFacts(
-        returnFlowFunc: FlowFunction<D>,
-        returnSite: Stmt,
-        exitEdgePoint: PathEdgePoint<D>,
-        callEdgePoint: PathEdgePoint<D>
-    ): void {
-        for (const fact of returnFlowFunc.getDataFacts(exitEdgePoint.fact)) {
-            const returnSitePoint = new PathEdgePoint<D>(returnSite, fact);
-            const cacheEdge = new PathEdge<D>(callEdgePoint, returnSitePoint);
-            let summaryEdgeHasCacheEdge = false;
-            for (const sEdge of this.summaryEdge) {
-                if (sEdge.edgeStart === callEdgePoint &&
-                    sEdge.edgeEnd.node === returnSite &&
-                    sEdge.edgeEnd.fact === fact) {
-                    summaryEdgeHasCacheEdge = true;
-                    break;
-                }
-            }
-            if (summaryEdgeHasCacheEdge) {
-                continue;
-            }
-            this.summaryEdge.add(cacheEdge);
-            const startOfCaller = this.getStartOfCallerMethod(callEdgePoint.node);
-            for (const pathEdge of this.pathEdgeSet) {
-                if (pathEdge.edgeStart.node === startOfCaller &&
-                    pathEdge.edgeEnd === callEdgePoint) {
-                    this.propagate(new PathEdge<D>(pathEdge.edgeStart, returnSitePoint));
+            for (const fact of returnFlowFunc.getDataFacts(exitEdgePoint.fact)) {
+                const returnSitePoint = new PathEdgePoint<D>(returnSite, fact);
+                if (!this.summaryStore.addCallSummary(
+                    callEdgePoint,
+                    returnSitePoint
+                )) continue;
+                const startOfCaller = this.getStartOfCallerMethod(callEdgePoint.node);
+                if (callerEdge.edgeStart.node === startOfCaller) {
+                    this.propagate(new PathEdge<D>(
+                        callerEdge.edgeStart,
+                        returnSitePoint
+                    ));
                 }
             }
         }
@@ -469,11 +359,11 @@ export abstract class DataflowSolver<D> {
         for (const fact of set) {
             this.propagate(new PathEdge<D>(start, new PathEdgePoint<D>(returnSite, fact)));
         }
-        for (const cacheEdge of this.summaryEdge) {
-            if (cacheEdge.edgeStart === edge.edgeEnd &&
-                cacheEdge.edgeEnd.node === returnSite) {
-                this.propagate(new PathEdge<D>(start, cacheEdge.edgeEnd));
-            }
+        for (const summaryPoint of this.summaryStore.getCallSummaries(
+            callEdgePoint,
+            returnSite
+        )) {
+            this.propagate(new PathEdge<D>(start, summaryPoint));
         }
     }
 
@@ -486,36 +376,17 @@ export abstract class DataflowSolver<D> {
         const callEdgePoint = edge.edgeEnd;
         const startEdgePoint = new PathEdgePoint(firstStmt, fact);
         this.propagate(new PathEdge<D>(startEdgePoint, startEdgePoint));
-        let coming: Set<PathEdgePoint<D>> | undefined;
-        for (const incoming of this.inComing.keys()) {
-            if (incoming.fact === startEdgePoint.fact && incoming.node === startEdgePoint.node) {
-                coming = this.inComing.get(incoming);
-                break;
-            }
-        }
-        if (coming === undefined) {
-            this.inComing.set(startEdgePoint, new Set([callEdgePoint]));
-        } else {
-            coming.add(callEdgePoint);
-        }
-        let exitEdgePoints: Set<PathEdgePoint<D>> = new Set();
-        for (const end of this.endSummary.keys()) {
-            if (end.fact === fact && end.node === firstStmt) {
-                exitEdgePoints = this.endSummary.get(end)!;
-            }
-        }
-        for (const exitEdgePoint of exitEdgePoints) {
+        this.summaryStore.addIncoming(startEdgePoint, edge);
+        for (const exitEdgePoint of this.summaryStore.getEndSummaries(startEdgePoint)) {
             const returnFlowFunc = this.problem.getExitToReturnFlowFunction(
                 exitEdgePoint.node,
                 returnSite,
                 callEdgePoint.node
             );
             for (const returnFact of returnFlowFunc.getDataFacts(exitEdgePoint.fact)) {
-                this.summaryEdge.add(
-                    new PathEdge<D>(
-                        edge.edgeEnd,
-                        new PathEdgePoint<D>(returnSite, returnFact)
-                    )
+                this.summaryStore.addCallSummary(
+                    edge.edgeEnd,
+                    new PathEdgePoint<D>(returnSite, returnFact)
                 );
             }
         }
@@ -576,7 +447,7 @@ export abstract class DataflowSolver<D> {
     }
 
     public getPathEdgeSet(): Set<PathEdge<D>> {
-        return this.pathEdgeSet;
+        return this.pathEdgeStore.asSet();
     }
 
     public getStatistics(): Readonly<IFDSSolverStatistics> | undefined {
