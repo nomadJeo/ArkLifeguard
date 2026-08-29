@@ -96,7 +96,7 @@ describe('ArkLifeguard CLI', () => {
         const report = JSON.parse(fs.readFileSync(statisticsPath, 'utf8'));
         expect(report.reportKind).toBe('ifds-solver-statistics');
         expect(report.resourceAnalysis.statistics.scheduling)
-            .toBe('later-edge-worklist');
+            .toBe('two-tier-control-flow');
         expect(report.resourceAnalysis.statistics.processedEdges).toBeGreaterThan(0);
         expect(report).not.toHaveProperty('abilities');
         fs.rmSync(directory, { recursive: true, force: true });

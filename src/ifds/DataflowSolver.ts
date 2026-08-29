@@ -44,7 +44,6 @@ type CallToReturnCacheEdge<D> = PathEdge<D>;
 
 export abstract class DataflowSolver<D> {
     protected problem: DataflowProblem<D>;
-    protected workList: Array<PathEdge<D>>;
     protected pathEdgeSet: Set<PathEdge<D>>;
     protected zeroFact: D;
     protected inComing: Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>;
@@ -53,9 +52,10 @@ export abstract class DataflowSolver<D> {
     protected scene: Scene;
     protected CHA!: ClassHierarchyAnalysis;
     protected stmtNexts: Map<Stmt, Set<Stmt>>;
-    protected laterEdges: Set<PathEdge<D>> = new Set();
+    private immediateWorkList: Array<PathEdge<D>>;
+    private immediateWorkListHead = 0;
+    private deferredWorkList: Array<PathEdge<D>>;
     private readonly statistics?: IFDSSolverStatistics;
-    private pendingDeferredEdges = 0;
 
     constructor(
         problem: DataflowProblem<D>,
@@ -65,14 +65,15 @@ export abstract class DataflowSolver<D> {
         this.problem = problem;
         this.scene = scene;
         this.zeroFact = problem.createZeroValue();
-        this.workList = new Array<PathEdge<D>>();
+        this.immediateWorkList = [];
+        this.deferredWorkList = [];
         this.pathEdgeSet = new Set<PathEdge<D>>();
         this.inComing = new Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>();
         this.endSummary = new Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>();
         this.summaryEdge = new Set<CallToReturnCacheEdge<D>>();
         this.stmtNexts = new Map();
         if (options.collectStatistics) {
-            this.statistics = createSolverStatistics('later-edge-worklist');
+            this.statistics = createSolverStatistics('two-tier-control-flow');
         }
     }
 
@@ -83,7 +84,6 @@ export abstract class DataflowSolver<D> {
         if (this.statistics) {
             this.statistics.solveTimeMs = Date.now() - startTime;
             this.statistics.finalPathEdgeCount = this.pathEdgeSet.size;
-            this.statistics.finalLaterEdgesSize = this.laterEdges.size;
         }
     }
 
@@ -103,14 +103,7 @@ export abstract class DataflowSolver<D> {
     protected init(): void {
         const edgePoint = new PathEdgePoint<D>(this.problem.getEntryPoint(), this.zeroFact);
         const edge = new PathEdge<D>(edgePoint, edgePoint);
-        this.workList.push(edge);
-        this.pathEdgeSet.add(edge);
-        if (this.statistics) {
-            this.statistics.propagationAttempts++;
-            this.statistics.uniqueEdgesEnqueued++;
-            this.statistics.immediateEnqueued++;
-            this.updateQueuePeaks();
-        }
+        this.propagate(edge);
 
         const cg = new CallGraph(this.scene);
         this.CHA = new ClassHierarchyAnalysis(
@@ -220,48 +213,52 @@ export abstract class DataflowSolver<D> {
         return false;
     }
 
-    private enqueueEdge(edge: PathEdge<D>, deferred: boolean): boolean {
+    /** Normalize or reject an edge before semantic deduplication and scheduling. */
+    protected prepareEdgeForPropagation(edge: PathEdge<D>): PathEdge<D> | null {
+        return edge;
+    }
+
+    /**
+     * Atomically deduplicate and enqueue an edge. Immediate edges are FIFO;
+     * deferred normal-flow edges are LIFO and run only after immediate work.
+     */
+    protected propagate(edge: PathEdge<D>, deferred = false): boolean {
         if (this.statistics) {
             this.statistics.propagationAttempts++;
             if (deferred) this.statistics.deferredPropagationAttempts++;
         }
-        if (!this.pathEdgeSetHasEdge(edge)) {
-            let index = this.workList.length;
-            for (let i = 0; i < this.workList.length; i++) {
-                if (this.laterEdges.has(this.workList[i])) {
-                    index = i;
-                    break;
-                }
-            }
-            this.workList.splice(index, 0, edge);
-            this.pathEdgeSet.add(edge);
-            if (deferred) this.pendingDeferredEdges++;
+        const prepared = this.prepareEdgeForPropagation(edge);
+        if (!prepared) return false;
+        if (this.pathEdgeSetHasEdge(prepared)) {
             if (this.statistics) {
-                this.statistics.uniqueEdgesEnqueued++;
-                if (deferred) {
-                    this.statistics.deferredEnqueued++;
-                } else {
-                    this.statistics.immediateEnqueued++;
-                }
+                this.statistics.duplicateEdgesSkipped++;
+                if (deferred) this.statistics.deferredDuplicateEdgesSkipped++;
             }
-            return true;
+            return false;
+        }
+
+        this.pathEdgeSet.add(prepared);
+        if (deferred) {
+            this.deferredWorkList.push(prepared);
+        } else {
+            this.immediateWorkList.push(prepared);
         }
         if (this.statistics) {
-            this.statistics.duplicateEdgesSkipped++;
-            if (deferred) this.statistics.deferredDuplicateEdgesSkipped++;
+            this.statistics.uniqueEdgesEnqueued++;
+            if (deferred) {
+                this.statistics.deferredEnqueued++;
+            } else {
+                this.statistics.immediateEnqueued++;
+            }
+            this.updateQueuePeaks();
         }
-        return false;
-    }
-
-    protected propagate(edge: PathEdge<D>): void {
-        this.enqueueEdge(edge, false);
-        this.updateQueuePeaks();
+        return true;
     }
 
     private updateQueuePeaks(): void {
         if (!this.statistics) return;
-        const deferred = this.pendingDeferredEdges;
-        const immediate = this.workList.length - deferred;
+        const immediate = this.immediateWorkList.length - this.immediateWorkListHead;
+        const deferred = this.deferredWorkList.length;
         this.statistics.maxImmediateQueueSize = Math.max(
             this.statistics.maxImmediateQueueSize,
             immediate
@@ -272,11 +269,7 @@ export abstract class DataflowSolver<D> {
         );
         this.statistics.maxCombinedQueueSize = Math.max(
             this.statistics.maxCombinedQueueSize,
-            this.workList.length
-        );
-        this.statistics.maxLaterEdgesSize = Math.max(
-            this.statistics.maxLaterEdgesSize,
-            this.laterEdges.size
+            immediate + deferred
         );
     }
 
@@ -354,9 +347,7 @@ export abstract class DataflowSolver<D> {
             for (const fact of set) {
                 const edgePoint = new PathEdgePoint<D>(stmt, fact);
                 const nextEdge = new PathEdge<D>(start, edgePoint);
-                this.enqueueEdge(nextEdge, true);
-                this.laterEdges.add(nextEdge);
-                this.updateQueuePeaks();
+                this.propagate(nextEdge, true);
             }
         }
     }
@@ -449,12 +440,8 @@ export abstract class DataflowSolver<D> {
     }
 
     protected doSolve(): void {
-        while (this.workList.length !== 0) {
-            const pathEdge = this.workList.shift()!;
-            if (this.laterEdges.has(pathEdge)) {
-                this.laterEdges.delete(pathEdge);
-                this.pendingDeferredEdges--;
-            }
+        while (this.hasPendingEdge()) {
+            const pathEdge = this.takeNextEdge()!;
             if (this.statistics) this.statistics.processedEdges++;
             const targetStmt = pathEdge.edgeEnd.node;
             if (!targetStmt) continue;
@@ -466,6 +453,23 @@ export abstract class DataflowSolver<D> {
                 this.processNormalNode(pathEdge);
             }
         }
+    }
+
+    protected hasPendingEdge(): boolean {
+        return this.immediateWorkListHead < this.immediateWorkList.length ||
+            this.deferredWorkList.length > 0;
+    }
+
+    protected takeNextEdge(): PathEdge<D> | undefined {
+        if (this.immediateWorkListHead < this.immediateWorkList.length) {
+            const edge = this.immediateWorkList[this.immediateWorkListHead++];
+            if (this.immediateWorkListHead === this.immediateWorkList.length) {
+                this.immediateWorkList = [];
+                this.immediateWorkListHead = 0;
+            }
+            return edge;
+        }
+        return this.deferredWorkList.pop();
     }
 
     protected isCallStatement(stmt: Stmt): boolean {
@@ -494,6 +498,6 @@ export abstract class DataflowSolver<D> {
     }
 
     public getStatistics(): Readonly<IFDSSolverStatistics> | undefined {
-        return this.statistics;
+        return this.statistics ? { ...this.statistics } : undefined;
     }
 }

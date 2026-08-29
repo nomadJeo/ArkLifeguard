@@ -22,6 +22,7 @@ import { getRecallMethodInParam } from '../../ifds';
 // Import through ArkAnalyzer's public barrel. Directly loading DataflowSolver before
 // Scene is initialized exposes the existing ArkFile -> src/index circular dependency.
 import { DataflowSolver } from '../../ifds';
+import type { DataflowSolverOptions } from '../../ifds';
 import { NullnessFact } from './NullnessFact';
 import { NullnessProblem } from './NullnessProblem';
 import { resolveProjectMethods } from './ProjectMethodResolver';
@@ -53,9 +54,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     private readonly pathEdgeIndex = new Map<string, PathEdge<NullnessFact>[]>();
     private readonly statementIds = new WeakMap<Stmt, number>();
     private nextStatementId = 1;
-    private immediateWorkList: PathEdge<NullnessFact>[] = [];
-    private immediateWorkListHead = 0;
-    private deferredWorkList: PathEdge<NullnessFact>[] = [];
     private readonly incomingIndex = new Map<
         string,
         PointIndexEntry<Set<PathEdge<NullnessFact>>>[]
@@ -76,9 +74,10 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     constructor(
         problem: NullnessProblem,
         scene: Scene,
-        private readonly additionalRoots: readonly NullnessSolverRoot[] = []
+        private readonly additionalRoots: readonly NullnessSolverRoot[] = [],
+        options: DataflowSolverOptions = {}
     ) {
-        super(problem, scene);
+        super(problem, scene, options);
         this.recursiveMethods = this.findRecursiveMethods(scene);
         this.largeProjectWidening = scene.getMethods().length >=
             problem.getConfig().largeProjectWideningThreshold;
@@ -89,29 +88,16 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     }
 
     protected init(): void {
-        super.init();
-        for (const root of this.additionalRoots) {
-            const rootPoint = new PathEdgePoint(root.entryPoint, this.zeroFact);
-            const rootEdge = new PathEdge(rootPoint, rootPoint);
-            this.workList.push(rootEdge);
-            this.pathEdgeSet.add(rootEdge);
-        }
         this.pathEdgeIndex.clear();
         this.incomingIndex.clear();
         this.endSummaryIndex.clear();
         this.summaryCache.clear();
         this.calleeCache.clear();
-        for (const edge of this.pathEdgeSet) {
-            this.addEdgeToIndex(edge);
+        super.init();
+        for (const root of this.additionalRoots) {
+            const rootPoint = new PathEdgePoint(root.entryPoint, this.zeroFact);
+            this.propagate(new PathEdge(rootPoint, rootPoint));
         }
-        // The generic solver stores both priority classes in one Array and uses
-        // shift(), a linear scan and splice() for every insertion/removal. Keep
-        // its initial edge, then use two O(1) queues while preserving the same
-        // ordering: call/return edges are FIFO and normal-flow edges are LIFO.
-        this.immediateWorkList = [...this.workList];
-        this.immediateWorkListHead = 0;
-        this.deferredWorkList = [];
-        this.workList.length = 0;
     }
 
     protected pathEdgeSetHasEdge(edge: PathEdge<NullnessFact>): boolean {
@@ -131,42 +117,16 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         return false;
     }
 
-    protected propagate(edge: PathEdge<NullnessFact>): void {
-        this.enqueueIfNew(edge, false);
-    }
-
-    protected processNormalNode(edge: PathEdge<NullnessFact>): void {
-        const start = edge.edgeStart;
-        const end = edge.edgeEnd;
-        const stmts = [...this.getChildren(end.node)].reverse();
-        for (const stmt of stmts) {
-            const flowFunction = this.problem.getNormalFlowFunction(end.node, stmt);
-            for (const fact of flowFunction.getDataFacts(end.fact)) {
-                this.enqueueIfNew(
-                    new PathEdge(
-                        start,
-                        new PathEdgePoint<NullnessFact>(stmt, fact)
-                    ),
-                    true
-                );
-            }
+    protected prepareEdgeForPropagation(
+        edge: PathEdge<NullnessFact>
+    ): PathEdge<NullnessFact> | null {
+        edge = this.abstractEdgeFacts(edge);
+        if (!edge.edgeEnd.fact.isZeroFact() &&
+            edge.edgeEnd.fact.propagationDepth >
+                (this.problem as NullnessProblem).getConfig().maxPropagationDepth) {
+            return null;
         }
-    }
-
-    protected doSolve(): void {
-        while (this.hasPendingEdge()) {
-            const pathEdge = this.takeNextEdge();
-            const targetStmt = pathEdge.edgeEnd.node;
-            if (!targetStmt) continue;
-            const isCall = this.isCallStatement(targetStmt);
-            if (isCall) {
-                this.processCallNode(pathEdge);
-            } else if (this.isExitStatement(targetStmt)) {
-                this.processExitNode(pathEdge);
-            } else {
-                this.processNormalNode(pathEdge);
-            }
-        }
+        return edge;
     }
 
     protected processExitNode(edge: PathEdge<NullnessFact>): void {
@@ -306,34 +266,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         return reached;
     }
 
-    private addEdgeToIndex(edge: PathEdge<NullnessFact>): void {
-        const key = this.edgeHashKey(edge);
-        const bucket = this.pathEdgeIndex.get(key);
-        if (bucket) {
-            bucket.push(edge);
-        } else {
-            this.pathEdgeIndex.set(key, [edge]);
-        }
-    }
-
-    private enqueueIfNew(edge: PathEdge<NullnessFact>, deferred: boolean): void {
-        edge = this.abstractEdgeFacts(edge);
-        if (!edge.edgeEnd.fact.isZeroFact() &&
-            edge.edgeEnd.fact.propagationDepth >
-                (this.problem as NullnessProblem).getConfig().maxPropagationDepth) {
-            return;
-        }
-        if (this.pathEdgeSetHasEdge(edge)) {
-            return;
-        }
-        this.pathEdgeSet.add(edge);
-        if (deferred) {
-            this.deferredWorkList.push(edge);
-        } else {
-            this.immediateWorkList.push(edge);
-        }
-    }
-
     private abstractEdgeFacts(
         edge: PathEdge<NullnessFact>
     ): PathEdge<NullnessFact> {
@@ -445,18 +377,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
             if (!indices.has(method)) visit(method);
         }
         return recursive;
-    }
-
-    private hasPendingEdge(): boolean {
-        return this.immediateWorkListHead < this.immediateWorkList.length ||
-            this.deferredWorkList.length > 0;
-    }
-
-    private takeNextEdge(): PathEdge<NullnessFact> {
-        if (this.immediateWorkListHead < this.immediateWorkList.length) {
-            return this.immediateWorkList[this.immediateWorkListHead++];
-        }
-        return this.deferredWorkList.pop()!;
     }
 
     private pointHashKey(point: PathEdgePoint<NullnessFact>): string {

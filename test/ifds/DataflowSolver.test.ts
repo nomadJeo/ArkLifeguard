@@ -72,7 +72,17 @@ class IdentityProblem extends DataflowProblem<string> {
     }
 }
 
-class IdentitySolver extends DataflowSolver<string> {}
+class IdentitySolver extends DataflowSolver<string> {
+    enqueueForTest(edge: PathEdge<string>, deferred = false): boolean {
+        return this.propagate(edge, deferred);
+    }
+
+    drainForTest(): PathEdge<string>[] {
+        const result: PathEdge<string>[] = [];
+        while (this.hasPendingEdge()) result.push(this.takeNextEdge()!);
+        return result;
+    }
+}
 
 function buildScene(): Scene {
     const projectPath = path.resolve(
@@ -119,25 +129,48 @@ describe('IFDS migration smoke tests', () => {
         }
     });
 
-    it('collects opt-in statistics without changing the original scheduler', () => {
-        const scene = buildScene();
-        const method = scene.getMethods().find(candidate => candidate.getName() === 'run')!;
-        const cfg = method.getCfg()!;
+    it('prioritizes immediate FIFO work over deferred LIFO work', () => {
+        const node = {} as Stmt;
         const solver = new IdentitySolver(
-            new IdentityProblem(cfg.getStartingStmt(), method),
-            scene,
+            new IdentityProblem(node, {} as ArkMethod),
+            new Scene(),
             { collectStatistics: true }
         );
-
-        solver.solve();
-
-        const statistics = solver.getStatistics();
-        expect(statistics?.scheduling).toBe('later-edge-worklist');
-        expect(statistics?.processedEdges).toBe(solver.getPathEdgeSet().size);
-        expect(statistics?.propagationAttempts).toBeGreaterThanOrEqual(
-            statistics?.uniqueEdgesEnqueued ?? 0
+        const edge = (fact: string): PathEdge<string> => new PathEdge(
+            new PathEdgePoint(node, 'START'),
+            new PathEdgePoint(node, fact)
         );
-        expect(statistics?.maxLaterEdgesSize).toBeGreaterThan(0);
-        expect(statistics?.finalPathEdgeCount).toBe(solver.getPathEdgeSet().size);
+
+        expect(solver.enqueueForTest(edge('I1'))).toBe(true);
+        expect(solver.enqueueForTest(edge('I2'))).toBe(true);
+        expect(solver.enqueueForTest(edge('D1'), true)).toBe(true);
+        expect(solver.enqueueForTest(edge('D2'), true)).toBe(true);
+        expect(solver.enqueueForTest(edge('D2'), true)).toBe(false);
+
+        expect(solver.drainForTest().map(item => item.edgeEnd.fact)).toEqual([
+            'I1', 'I2', 'D2', 'D1',
+        ]);
+        expect(solver.getStatistics()).toMatchObject({
+            scheduling: 'two-tier-control-flow',
+            propagationAttempts: 5,
+            deferredPropagationAttempts: 3,
+            uniqueEdgesEnqueued: 4,
+            duplicateEdgesSkipped: 1,
+            deferredDuplicateEdgesSkipped: 1,
+            immediateEnqueued: 2,
+            deferredEnqueued: 2,
+            maxCombinedQueueSize: 4,
+            maxLaterEdgesSize: 0,
+            finalLaterEdgesSize: 0,
+        });
+    });
+
+    it('keeps statistics disabled by default', () => {
+        const node = {} as Stmt;
+        const solver = new IdentitySolver(
+            new IdentityProblem(node, {} as ArkMethod),
+            new Scene()
+        );
+        expect(solver.getStatistics()).toBeUndefined();
     });
 });
