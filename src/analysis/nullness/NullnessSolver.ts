@@ -44,16 +44,6 @@ export interface NullnessSolverRoot {
 
 /** Thin typed facade over ArkAnalyzer's generic IFDS solver. */
 export class NullnessSolver extends DataflowSolver<NullnessFact> {
-    /**
-     * ArkAnalyzer's generic solver checks every previously reached path edge when
-     * deduplicating a new edge. Nullness analyses routinely create tens of
-     * thousands of semantically equal fact objects, so that scan becomes
-     * quadratic. Keep a nullness-specific hash index and retain an equality check
-     * inside each bucket to make hash collisions harmless.
-     */
-    private readonly pathEdgeIndex = new Map<string, PathEdge<NullnessFact>[]>();
-    private readonly statementIds = new WeakMap<Stmt, number>();
-    private nextStatementId = 1;
     private readonly incomingIndex = new Map<
         string,
         PointIndexEntry<Set<PathEdge<NullnessFact>>>[]
@@ -88,7 +78,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     }
 
     protected init(): void {
-        this.pathEdgeIndex.clear();
         this.incomingIndex.clear();
         this.endSummaryIndex.clear();
         this.summaryCache.clear();
@@ -98,23 +87,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
             const rootPoint = new PathEdgePoint(root.entryPoint, this.zeroFact);
             this.propagate(new PathEdge(rootPoint, rootPoint));
         }
-    }
-
-    protected pathEdgeSetHasEdge(edge: PathEdge<NullnessFact>): boolean {
-        const key = this.edgeHashKey(edge);
-        const bucket = this.pathEdgeIndex.get(key);
-        if (bucket?.some(existing => this.edgesEqual(existing, edge))) {
-            return true;
-        }
-
-        // DataflowSolver adds the edge to pathEdgeSet immediately after a false
-        // result, so index it here without performing a second lookup.
-        if (bucket) {
-            bucket.push(edge);
-        } else {
-            this.pathEdgeIndex.set(key, [edge]);
-        }
-        return false;
     }
 
     protected prepareEdgeForPropagation(
@@ -380,7 +352,7 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     }
 
     private pointHashKey(point: PathEdgePoint<NullnessFact>): string {
-        return `${this.statementId(point.node)}:${point.fact.hashCode()}`;
+        return `${this.statementId(point.node)}:${this.problem.factHash(point.fact)}`;
     }
 
     private findPointValue<T>(
@@ -463,39 +435,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         }
         this.calleeCache.set(invokeStmt, callees);
         return callees;
-    }
-
-    private edgeHashKey(edge: PathEdge<NullnessFact>): string {
-        return `${this.statementId(edge.edgeStart.node)}:${edge.edgeStart.fact.hashCode()}>` +
-            `${this.statementId(edge.edgeEnd.node)}:${edge.edgeEnd.fact.hashCode()}`;
-    }
-
-    private statementId(stmt: Stmt): number {
-        const existing = this.statementIds.get(stmt);
-        if (existing !== undefined) {
-            return existing;
-        }
-        const id = this.nextStatementId++;
-        this.statementIds.set(stmt, id);
-        return id;
-    }
-
-    private edgesEqual(
-        left: PathEdge<NullnessFact>,
-        right: PathEdge<NullnessFact>
-    ): boolean {
-        return left.edgeStart.node === right.edgeStart.node &&
-            left.edgeEnd.node === right.edgeEnd.node &&
-            this.problem.factEqual(left.edgeStart.fact, right.edgeStart.fact) &&
-            this.problem.factEqual(left.edgeEnd.fact, right.edgeEnd.fact);
-    }
-
-    private pointsEqual(
-        left: PathEdgePoint<NullnessFact>,
-        right: PathEdgePoint<NullnessFact>
-    ): boolean {
-        return left.node === right.node &&
-            this.problem.factEqual(left.fact, right.fact);
     }
 
     protected isCallStatement(stmt: Stmt): boolean {

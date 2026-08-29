@@ -39,6 +39,15 @@ export abstract class DataflowProblem<D> {
     abstract getEntryMethod(): ArkMethod;
 
     abstract factEqual(d1: D, d2: D): boolean;
+
+    /**
+     * Return a stable semantic hash for one fact. Equal facts must have the same
+     * hash. The constant fallback preserves correctness for existing problems,
+     * but places every fact in the same collision bucket.
+     */
+    factHash(_fact: D): number {
+        return 0;
+    }
 }
 
 export interface FlowFunction<D> {

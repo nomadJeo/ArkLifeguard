@@ -249,6 +249,10 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
     factEqual(d1: TaintFact, d2: TaintFact): boolean {
         return d1.equals(d2);
     }
+
+    factHash(fact: TaintFact): number {
+        return fact.hashCode();
+    }
     
     /**
      * 普通边的流函数

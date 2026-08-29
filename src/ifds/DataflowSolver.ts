@@ -41,6 +41,9 @@ import {
  * Practical Extensions to the IFDS Algorithm.
  */
 type CallToReturnCacheEdge<D> = PathEdge<D>;
+type PathEdgeFactIndex<D> = Map<number, PathEdge<D>[]>;
+type PathEdgeEndFactIndex<D> = Map<number, PathEdgeFactIndex<D>>;
+type PathEdgeNodeIndex<D> = Map<Stmt, PathEdgeEndFactIndex<D>>;
 
 export abstract class DataflowSolver<D> {
     protected problem: DataflowProblem<D>;
@@ -56,6 +59,9 @@ export abstract class DataflowSolver<D> {
     private immediateWorkListHead = 0;
     private deferredWorkList: Array<PathEdge<D>>;
     private readonly statistics?: IFDSSolverStatistics;
+    private readonly pathEdgeIndex = new Map<Stmt, PathEdgeNodeIndex<D>>();
+    private readonly statementIds = new WeakMap<Stmt, number>();
+    private nextStatementId = 1;
 
     constructor(
         problem: DataflowProblem<D>,
@@ -89,7 +95,8 @@ export abstract class DataflowSolver<D> {
 
     protected computeResult(stmt: Stmt, d: D): boolean {
         for (const pathEdge of this.pathEdgeSet) {
-            if (pathEdge.edgeEnd.node === stmt && pathEdge.edgeEnd.fact === d) {
+            if (pathEdge.edgeEnd.node === stmt &&
+                this.problem.factEqual(pathEdge.edgeEnd.fact, d)) {
                 return true;
             }
         }
@@ -201,14 +208,13 @@ export abstract class DataflowSolver<D> {
     protected pathEdgeSetHasEdge(edge: PathEdge<D>): boolean {
         let candidateChecks = 0;
         let factEqualityChecks = 0;
-        for (const path of this.pathEdgeSet) {
+        const bucket = this.getPathEdgeBucket(edge, false);
+        for (const path of bucket ?? []) {
             candidateChecks++;
-            factEqualityChecks++;
-            this.problem.factEqual(path.edgeEnd.fact, edge.edgeEnd.fact);
             if (path.edgeEnd.node !== edge.edgeEnd.node) continue;
+            if (path.edgeStart.node !== edge.edgeStart.node) continue;
             factEqualityChecks++;
             if (!this.problem.factEqual(path.edgeEnd.fact, edge.edgeEnd.fact)) continue;
-            if (path.edgeStart.node !== edge.edgeStart.node) continue;
             factEqualityChecks++;
             if (this.problem.factEqual(path.edgeStart.fact, edge.edgeStart.fact)) {
                 this.recordDeduplicationLookup(candidateChecks, factEqualityChecks);
@@ -217,6 +223,61 @@ export abstract class DataflowSolver<D> {
         }
         this.recordDeduplicationLookup(candidateChecks, factEqualityChecks);
         return false;
+    }
+
+    private addPathEdgeToIndex(edge: PathEdge<D>): void {
+        this.getPathEdgeBucket(edge, true)!.push(edge);
+    }
+
+    private getPathEdgeBucket(
+        edge: PathEdge<D>,
+        create: boolean
+    ): PathEdge<D>[] | undefined {
+        let byEndNode = this.pathEdgeIndex.get(edge.edgeStart.node);
+        if (!byEndNode) {
+            if (!create) return undefined;
+            byEndNode = new Map();
+            this.pathEdgeIndex.set(edge.edgeStart.node, byEndNode);
+        }
+
+        let byStartFact = byEndNode.get(edge.edgeEnd.node);
+        if (!byStartFact) {
+            if (!create) return undefined;
+            byStartFact = new Map();
+            byEndNode.set(edge.edgeEnd.node, byStartFact);
+        }
+
+        const startHash = this.problem.factHash(edge.edgeStart.fact);
+        let byEndFact = byStartFact.get(startHash);
+        if (!byEndFact) {
+            if (!create) return undefined;
+            byEndFact = new Map();
+            byStartFact.set(startHash, byEndFact);
+        }
+
+        const endHash = this.problem.factHash(edge.edgeEnd.fact);
+        let bucket = byEndFact.get(endHash);
+        if (!bucket && create) {
+            bucket = [];
+            byEndFact.set(endHash, bucket);
+        }
+        return bucket;
+    }
+
+    protected statementId(stmt: Stmt): number {
+        const existing = this.statementIds.get(stmt);
+        if (existing !== undefined) return existing;
+        const id = this.nextStatementId++;
+        this.statementIds.set(stmt, id);
+        return id;
+    }
+
+    protected pointsEqual(
+        left: PathEdgePoint<D>,
+        right: PathEdgePoint<D>
+    ): boolean {
+        return left.node === right.node &&
+            this.problem.factEqual(left.fact, right.fact);
     }
 
     private recordDeduplicationLookup(
@@ -258,6 +319,7 @@ export abstract class DataflowSolver<D> {
         }
 
         this.pathEdgeSet.add(prepared);
+        this.addPathEdgeToIndex(prepared);
         if (deferred) {
             this.deferredWorkList.push(prepared);
         } else {

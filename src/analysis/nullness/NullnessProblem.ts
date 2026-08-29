@@ -435,6 +435,10 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
         return left.equals(right);
     }
 
+    factHash(fact: NullnessFact): number {
+        return fact.hashCode();
+    }
+
     getConfig(): Readonly<Required<NullnessAnalysisConfig>> {
         return this.config;
     }
