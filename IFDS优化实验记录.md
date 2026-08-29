@@ -333,6 +333,19 @@ out/ifds-equality-hash-index-final-real-apps.json
 - ArkDefectBench 保持 TP=37、TN=12、FP=0、FN=3（49/52）。
 - KeePassHO 诊断逐项一致；传播尝试 31,098、唯一/最终 PathEdge 27,989，与修复前相同，说明该项目未触发双 caller 缺口。单次 IFDS 求解耗时为 903 ms，未见明显回归。
 
+### 扩展真实项目对照
+
+为检查更大项目上的性能影响，使用修复前提交 `5b1f552` 和修复后提交 `569bfba` 分别运行 `AnimeZ`、`harmony-utils` 和 `LinysBrowser_NEXT`。两次运行共用同一份项目集、SDK、依赖和分析参数。
+
+| 项目 | 修复前 IFDS | 修复后 IFDS | 变化 | PathEdge 是否一致 |
+| --- | ---: | ---: | ---: | --- |
+| AnimeZ | 311 ms | 331 ms | +6.4% | 是（9,897） |
+| harmony-utils | 1,037 ms | 1,010 ms | -2.6% | 是（33,341） |
+| LinysBrowser_NEXT | 2,443 ms | 2,326 ms | -4.8% | 是（84,338） |
+| 合计 | 3,791 ms | 3,667 ms | -3.3% | 是（127,576） |
+
+三个项目的诊断均逐项一致，传播尝试合计均为 143,467，重复 Edge 合计均为 15,891。这说明它们也没有触发可观测的多 caller 补传播。合计耗时下降 3.3%，但 `AnimeZ` 单项目反而增加 6.4%，单次结果不具有一致性，因此不能证明该修复带来稳定性能提升。
+
 ### 结论
 
 保留修复。正确性缺口已由最小用例复现并关闭，真实项目单次运行未发现语义或性能回归。不将本次改动解释为 flow 缓存优化。
@@ -341,6 +354,10 @@ out/ifds-equality-hash-index-final-real-apps.json
 
 - 文件：`out/ifds-summary-existing-callers-keepassho.json`
 - SHA-256：`f76b75d26b922dee552f9509015f9544c9f99e3e441f7ac7635615c5b3b7cac4`
+- 三项目修复前：`/tmp/ifds-summary-callers-baseline-3projects.json`
+- 修复前 SHA-256：`ca64f264565403f7a12c0ad773e1fc9778b142de6962f46d8375d5d00ca5c453`
+- 三项目修复后：`out/ifds-summary-callers-fixed-3projects.json`
+- 修复后 SHA-256：`1eb2ca7f5a4bf15b71c262ef834208af5f72a3b3d52059092079c1268da77301`
 
 ## 后续实验模板
 
