@@ -30,6 +30,11 @@ import {
 import { getRecallMethodInParam } from './CallResolver';
 import { DataflowProblem, FlowFunction } from './DataflowProblem';
 import { PathEdge, PathEdgePoint } from './Edge';
+import {
+    createSolverStatistics,
+    DataflowSolverOptions,
+    IFDSSolverStatistics,
+} from './SolverStatistics';
 
 /*
  * This program is roughly an implementation of the paper:
@@ -49,8 +54,14 @@ export abstract class DataflowSolver<D> {
     protected CHA!: ClassHierarchyAnalysis;
     protected stmtNexts: Map<Stmt, Set<Stmt>>;
     protected laterEdges: Set<PathEdge<D>> = new Set();
+    private readonly statistics?: IFDSSolverStatistics;
+    private pendingDeferredEdges = 0;
 
-    constructor(problem: DataflowProblem<D>, scene: Scene) {
+    constructor(
+        problem: DataflowProblem<D>,
+        scene: Scene,
+        options: DataflowSolverOptions = {}
+    ) {
         this.problem = problem;
         this.scene = scene;
         this.zeroFact = problem.createZeroValue();
@@ -60,11 +71,20 @@ export abstract class DataflowSolver<D> {
         this.endSummary = new Map<PathEdgePoint<D>, Set<PathEdgePoint<D>>>();
         this.summaryEdge = new Set<CallToReturnCacheEdge<D>>();
         this.stmtNexts = new Map();
+        if (options.collectStatistics) {
+            this.statistics = createSolverStatistics('later-edge-worklist');
+        }
     }
 
     public solve(): void {
+        const startTime = Date.now();
         this.init();
         this.doSolve();
+        if (this.statistics) {
+            this.statistics.solveTimeMs = Date.now() - startTime;
+            this.statistics.finalPathEdgeCount = this.pathEdgeSet.size;
+            this.statistics.finalLaterEdgesSize = this.laterEdges.size;
+        }
     }
 
     protected computeResult(stmt: Stmt, d: D): boolean {
@@ -85,6 +105,12 @@ export abstract class DataflowSolver<D> {
         const edge = new PathEdge<D>(edgePoint, edgePoint);
         this.workList.push(edge);
         this.pathEdgeSet.add(edge);
+        if (this.statistics) {
+            this.statistics.propagationAttempts++;
+            this.statistics.uniqueEdgesEnqueued++;
+            this.statistics.immediateEnqueued++;
+            this.updateQueuePeaks();
+        }
 
         const cg = new CallGraph(this.scene);
         this.CHA = new ClassHierarchyAnalysis(
@@ -194,7 +220,11 @@ export abstract class DataflowSolver<D> {
         return false;
     }
 
-    protected propagate(edge: PathEdge<D>): void {
+    private enqueueEdge(edge: PathEdge<D>, deferred: boolean): boolean {
+        if (this.statistics) {
+            this.statistics.propagationAttempts++;
+            if (deferred) this.statistics.deferredPropagationAttempts++;
+        }
         if (!this.pathEdgeSetHasEdge(edge)) {
             let index = this.workList.length;
             for (let i = 0; i < this.workList.length; i++) {
@@ -205,7 +235,49 @@ export abstract class DataflowSolver<D> {
             }
             this.workList.splice(index, 0, edge);
             this.pathEdgeSet.add(edge);
+            if (deferred) this.pendingDeferredEdges++;
+            if (this.statistics) {
+                this.statistics.uniqueEdgesEnqueued++;
+                if (deferred) {
+                    this.statistics.deferredEnqueued++;
+                } else {
+                    this.statistics.immediateEnqueued++;
+                }
+            }
+            return true;
         }
+        if (this.statistics) {
+            this.statistics.duplicateEdgesSkipped++;
+            if (deferred) this.statistics.deferredDuplicateEdgesSkipped++;
+        }
+        return false;
+    }
+
+    protected propagate(edge: PathEdge<D>): void {
+        this.enqueueEdge(edge, false);
+        this.updateQueuePeaks();
+    }
+
+    private updateQueuePeaks(): void {
+        if (!this.statistics) return;
+        const deferred = this.pendingDeferredEdges;
+        const immediate = this.workList.length - deferred;
+        this.statistics.maxImmediateQueueSize = Math.max(
+            this.statistics.maxImmediateQueueSize,
+            immediate
+        );
+        this.statistics.maxDeferredQueueSize = Math.max(
+            this.statistics.maxDeferredQueueSize,
+            deferred
+        );
+        this.statistics.maxCombinedQueueSize = Math.max(
+            this.statistics.maxCombinedQueueSize,
+            this.workList.length
+        );
+        this.statistics.maxLaterEdgesSize = Math.max(
+            this.statistics.maxLaterEdgesSize,
+            this.laterEdges.size
+        );
     }
 
     protected processExitNode(edge: PathEdge<D>): void {
@@ -282,8 +354,9 @@ export abstract class DataflowSolver<D> {
             for (const fact of set) {
                 const edgePoint = new PathEdgePoint<D>(stmt, fact);
                 const nextEdge = new PathEdge<D>(start, edgePoint);
-                this.propagate(nextEdge);
+                this.enqueueEdge(nextEdge, true);
                 this.laterEdges.add(nextEdge);
+                this.updateQueuePeaks();
             }
         }
     }
@@ -380,7 +453,9 @@ export abstract class DataflowSolver<D> {
             const pathEdge = this.workList.shift()!;
             if (this.laterEdges.has(pathEdge)) {
                 this.laterEdges.delete(pathEdge);
+                this.pendingDeferredEdges--;
             }
+            if (this.statistics) this.statistics.processedEdges++;
             const targetStmt = pathEdge.edgeEnd.node;
             if (!targetStmt) continue;
             if (this.isCallStatement(targetStmt)) {
@@ -416,5 +491,9 @@ export abstract class DataflowSolver<D> {
 
     public getPathEdgeSet(): Set<PathEdge<D>> {
         return this.pathEdgeSet;
+    }
+
+    public getStatistics(): Readonly<IFDSSolverStatistics> | undefined {
+        return this.statistics;
     }
 }

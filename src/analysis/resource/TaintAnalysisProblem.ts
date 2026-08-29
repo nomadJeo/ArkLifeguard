@@ -145,6 +145,8 @@ export interface TaintAnalysisConfig {
      * 默认值 1：CFG 为 DAG，IFDS 单趟即可完成；值越大分析越全面但代价越高。
      */
     maxCallbackIterations?: number;
+    /** Collect aggregate IFDS solver statistics for developer benchmarking. */
+    collectSolverStatistics?: boolean;
 }
 
 /**
@@ -210,6 +212,7 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
             maxAbilitiesPerFlow: this.maxAbilitiesPerFlow,
             maxNavigationHops: this.maxNavigationHops,
             maxCallbackIterations: config?.maxCallbackIterations ?? 1,
+            collectSolverStatistics: config?.collectSolverStatistics ?? false,
         };
 
         this.zeroFact = TaintFact.getZeroFact();

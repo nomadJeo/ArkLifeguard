@@ -16,6 +16,7 @@ import {
     type ResourceLeakRecord,
     type TaintLeakRecord,
 } from '../src/application/ProjectAnalyzer';
+import type { IFDSSolverStatistics } from '../src/ifds';
 
 type ProjectStatus = 'success' | 'failed' | 'timeout';
 
@@ -38,6 +39,7 @@ interface Options {
     maxAbilitiesPerFlow: number;
     maxNavigationHops: number;
     maxPropagationDepth: number;
+    collectSolverStatistics: boolean;
     limit?: number;
     listOnly: boolean;
     workerProject?: string;
@@ -62,6 +64,7 @@ interface ProjectResult {
     totalTimeMs: number;
     resourceAnalysisTimeMs: number;
     peakRssMB: number | null;
+    solverStatistics?: Readonly<IFDSSolverStatistics>;
     resourceLeaks: ResourceLeakRecord[];
     taintLeaks: TaintLeakRecord[];
     methodLocalLeaks: MethodLocalResourceLeakRecord[];
@@ -79,6 +82,7 @@ interface RealAppsReport {
         maxAbilitiesPerFlow: number;
         maxNavigationHops: number;
         maxPropagationDepth: number;
+        collectSolverStatistics: boolean;
     };
     summary: {
         selectedProjects: number;
@@ -94,6 +98,18 @@ interface RealAppsReport {
         averageResourceAnalysisTimeMs: number;
         averagePeakRssMB: number;
         maxPeakRssMB: number;
+        solverStatistics?: {
+            solveTimeMs: number;
+            propagationAttempts: number;
+            deferredPropagationAttempts: number;
+            uniqueEdgesEnqueued: number;
+            duplicateEdgesSkipped: number;
+            deferredDuplicateEdgesSkipped: number;
+            processedEdges: number;
+            maxCombinedQueueSize: number;
+            maxLaterEdgesSize: number;
+            finalLaterEdgesSize: number;
+        };
     };
     projects: ProjectResult[];
 }
@@ -120,6 +136,7 @@ function help(): void {
         '  --max-abilities-per-flow <n>  Ability bound for one resource flow; default: 3',
         '  --max-navigation-hops <n>   Navigation bound for one resource flow; default: 5',
         '  --max-propagation-depth <n> Resource fact propagation bound; default: 40',
+        '  --ifds-stats                Collect aggregate IFDS solver statistics',
         '  --list                      List projects without analyzing',
         '  -h, --help                  Show this help',
         '',
@@ -161,6 +178,7 @@ function parseArgs(args: string[]): Options {
     let maxAbilitiesPerFlow = 3;
     let maxNavigationHops = 5;
     let maxPropagationDepth = 40;
+    let collectSolverStatistics = false;
     let limit: number | undefined;
     let listOnly = false;
     let workerProject: string | undefined;
@@ -224,6 +242,8 @@ function parseArgs(args: string[]): Options {
             maxPropagationDepth = positiveInteger(
                 arg.slice('--max-propagation-depth='.length), '--max-propagation-depth'
             );
+        } else if (arg === '--ifds-stats') {
+            collectSolverStatistics = true;
         } else if (arg === '--list') {
             listOnly = true;
         } else if (arg === '--worker-project') {
@@ -246,6 +266,7 @@ function parseArgs(args: string[]): Options {
         maxAbilitiesPerFlow,
         maxNavigationHops,
         maxPropagationDepth,
+        collectSolverStatistics,
         limit,
         listOnly,
         workerProject,
@@ -316,6 +337,7 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
             maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
             maxNavigationHops: options.maxNavigationHops,
             maxPropagationDepth: options.maxPropagationDepth,
+            collectSolverStatistics: options.collectSolverStatistics,
         }).analyze(projectPath);
         record.projectFiles = result.summary.projectFiles;
         record.classes = result.summary.classes;
@@ -332,6 +354,7 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
         record.reachedStatements = result.resourceAnalysis.reachedStatements;
         record.reachedFacts = result.resourceAnalysis.reachedFacts;
         record.resourceAnalysisTimeMs = result.duration.resourceAnalysis;
+        record.solverStatistics = result.resourceAnalysis.solverStatistics;
         if (result.status !== 'success' || !result.resourceAnalysis.success) {
             record.error = result.resourceAnalysis.error ??
                 (result.errors.join('; ') || 'Resource analysis failed without an error message');
@@ -397,6 +420,30 @@ function updateSummary(report: RealAppsReport): void {
         ),
         averagePeakRssMB: average(rss),
         maxPeakRssMB: rss.length === 0 ? 0 : Math.max(...rss),
+        ...(report.settings.collectSolverStatistics ? {
+            solverStatistics: {
+                solveTimeMs: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.solveTimeMs ?? 0), 0),
+                propagationAttempts: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.propagationAttempts ?? 0), 0),
+                deferredPropagationAttempts: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.deferredPropagationAttempts ?? 0), 0),
+                uniqueEdgesEnqueued: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.uniqueEdgesEnqueued ?? 0), 0),
+                duplicateEdgesSkipped: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.duplicateEdgesSkipped ?? 0), 0),
+                deferredDuplicateEdgesSkipped: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.deferredDuplicateEdgesSkipped ?? 0), 0),
+                processedEdges: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.processedEdges ?? 0), 0),
+                maxCombinedQueueSize: successful.reduce((max, item) =>
+                    Math.max(max, item.solverStatistics?.maxCombinedQueueSize ?? 0), 0),
+                maxLaterEdgesSize: successful.reduce((max, item) =>
+                    Math.max(max, item.solverStatistics?.maxLaterEdgesSize ?? 0), 0),
+                finalLaterEdgesSize: successful.reduce((sum, item) =>
+                    sum + (item.solverStatistics?.finalLaterEdgesSize ?? 0), 0),
+            },
+        } : {}),
     };
 }
 
@@ -437,6 +484,7 @@ async function main(): Promise<void> {
             maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
             maxNavigationHops: options.maxNavigationHops,
             maxPropagationDepth: options.maxPropagationDepth,
+            collectSolverStatistics: options.collectSolverStatistics,
         },
         summary: emptySummary(selected.length),
         projects: [],
@@ -451,7 +499,7 @@ async function main(): Promise<void> {
             os.tmpdir(), `ark-resource-real-${process.pid}-${Date.now()}-${index}.json`
         );
         console.log(`[${index + 1}/${selected.length}] ${item.name}`);
-        const child = spawnSync(process.execPath, [
+        const childArgs = [
             viteNodePath,
             scriptPath,
             '--worker-project', item.name,
@@ -462,7 +510,9 @@ async function main(): Promise<void> {
             '--max-abilities-per-flow', String(options.maxAbilitiesPerFlow),
             '--max-navigation-hops', String(options.maxNavigationHops),
             '--max-propagation-depth', String(options.maxPropagationDepth),
-        ], {
+        ];
+        if (options.collectSolverStatistics) childArgs.push('--ifds-stats');
+        const child = spawnSync(process.execPath, childArgs, {
             cwd: repositoryRoot,
             encoding: 'utf8',
             timeout: options.timeoutMs,

@@ -50,7 +50,7 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --output out/report.json
 ```
 
-默认同时运行资源泄漏分析和空指针分析；使用 `--checks nullness` 或 `--checks resource` 可选择单项检查。默认报告只保留诊断和核心摘要，`--detailed` 才输出 Ability、Component、导航、DummyMain 和求解统计等内部信息。SDK 配置、真实工程要求、分析边界与报告解读见 [快速使用指南](./QUICKSTART.md)。
+默认同时运行资源泄漏分析和空指针分析；使用 `--checks nullness` 或 `--checks resource` 可选择单项检查。主报告始终只保留诊断和核心摘要；Ability、Component、导航和 DummyMain 等建模信息由 `--lifecycle-report <path>` 单独输出，IFDS 求解统计由 `--ifds-stats <path>` 单独输出。SDK 配置、真实工程要求、分析边界与报告解读见 [快速使用指南](./QUICKSTART.md)。
 
 构建后也可以直接运行发布产物：
 
@@ -95,7 +95,7 @@ ArkLifeguard/
 | `--max-access-path-length` | 5 | 空指针访问路径的最大长度。 |
 | `--max-propagation-depth` | 40 | 资源与空指针 Fact 的最大传播深度。 |
 
-详细报告中的 `settings.bounds` 记录参数值，`settings.boundEnforcement` 说明参数在本次分析中是否实际生效；生成详细报告时使用 `--detailed`。
+复现实验时应同时保留实际命令行参数，并按需生成独立的生命周期建模报告和 IFDS 统计报告。
 
 ## 常用开发命令
 

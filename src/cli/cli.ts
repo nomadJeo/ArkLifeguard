@@ -12,7 +12,12 @@ import {
     Option,
 } from 'commander';
 import { ProjectAnalysisOptions, ProjectAnalyzer } from '../application';
-import { ReportFormat, ReportGenerator } from '../report';
+import {
+    LifecycleReportGenerator,
+    ReportFormat,
+    ReportGenerator,
+    SolverStatisticsReportGenerator,
+} from '../report';
 
 const VERSION = '0.1.0';
 const NAME = 'arklifeguard';
@@ -32,7 +37,8 @@ interface AnalyzeCliOptions {
     maxAccessPathLength: number;
     maxPropagationDepth: number;
     reportUnresolvedReturns: boolean;
-    detailed: boolean;
+    lifecycleReport?: string;
+    ifdsStats?: string;
     title?: string;
     verbose: boolean;
 }
@@ -68,7 +74,8 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
         .option('--max-access-path-length <n>', 'maximum nullness access-path length', positiveInteger, 5)
         .option('--max-propagation-depth <n>', 'maximum resource/nullness fact propagation depth', positiveInteger, 40)
         .option('--report-unresolved-returns', 'include low-confidence unresolved-return reports', false)
-        .option('-d, --detailed', 'include lifecycle, component, navigation and solver internals in the report', false)
+        .option('--lifecycle-report <path>', 'write lifecycle modeling details to a separate JSON report')
+        .option('--ifds-stats <path>', 'collect resource IFDS statistics and write a separate JSON report')
         .option('--title <title>', 'custom report title')
         .option('-v, --verbose', 'show lifecycle analysis logs', false)
         .action(async (projectPath: string, options: AnalyzeCliOptions) => {
@@ -90,6 +97,7 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
                     maxAccessPathLength: options.maxAccessPathLength,
                     maxPropagationDepth: options.maxPropagationDepth,
                     reportUnresolvedReturns: options.reportUnresolvedReturns,
+                    collectSolverStatistics: options.ifdsStats !== undefined,
                     verbose: options.verbose,
                 };
                 const result = await new ProjectAnalyzer(analysisOptions).analyze(projectPath);
@@ -97,13 +105,22 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
                 const report = new ReportGenerator().generate(result, {
                     format: options.format,
                     outputPath,
-                    detailed: options.detailed,
                     title: options.title,
                 });
                 if (outputPath) {
                     console.log(`Report written to: ${outputPath}`);
                 } else {
                     console.log(report);
+                }
+                if (options.lifecycleReport) {
+                    const lifecyclePath = path.resolve(options.lifecycleReport);
+                    new LifecycleReportGenerator().generate(result, lifecyclePath);
+                    console.log(`Lifecycle modeling report written to: ${lifecyclePath}`);
+                }
+                if (options.ifdsStats) {
+                    const statisticsPath = path.resolve(options.ifdsStats);
+                    new SolverStatisticsReportGenerator().generate(result, statisticsPath);
+                    console.log(`IFDS statistics report written to: ${statisticsPath}`);
                 }
                 if (result.status !== 'success') exitCode = 2;
             } catch (error) {

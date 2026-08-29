@@ -118,4 +118,26 @@ describe('IFDS migration smoke tests', () => {
             expect(reachedStatements.has(stmt), stmt.toString()).toBe(true);
         }
     });
+
+    it('collects opt-in statistics without changing the original scheduler', () => {
+        const scene = buildScene();
+        const method = scene.getMethods().find(candidate => candidate.getName() === 'run')!;
+        const cfg = method.getCfg()!;
+        const solver = new IdentitySolver(
+            new IdentityProblem(cfg.getStartingStmt(), method),
+            scene,
+            { collectStatistics: true }
+        );
+
+        solver.solve();
+
+        const statistics = solver.getStatistics();
+        expect(statistics?.scheduling).toBe('later-edge-worklist');
+        expect(statistics?.processedEdges).toBe(solver.getPathEdgeSet().size);
+        expect(statistics?.propagationAttempts).toBeGreaterThanOrEqual(
+            statistics?.uniqueEdgesEnqueued ?? 0
+        );
+        expect(statistics?.maxLaterEdgesSize).toBeGreaterThan(0);
+        expect(statistics?.finalPathEdgeCount).toBe(solver.getPathEdgeSet().size);
+    });
 });

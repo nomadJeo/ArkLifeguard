@@ -23,6 +23,7 @@ import {
     SourceSinkLocationScanner,
     TaintAnalysisRunner,
 } from '../analysis/resource';
+import type { IFDSSolverStatistics } from '../ifds';
 
 export interface ProjectAnalysisOptions {
     sdkRoot?: string;
@@ -38,6 +39,7 @@ export interface ProjectAnalysisOptions {
     maxAccessPathLength?: number;
     maxPropagationDepth?: number;
     reportUnresolvedReturns?: boolean;
+    collectSolverStatistics?: boolean;
     verbose?: boolean;
 }
 
@@ -125,6 +127,7 @@ export interface ProjectAnalysisResult {
             maxPropagationDepth: 'enforced';
         };
         reportUnresolvedReturns: boolean;
+        collectSolverStatistics: boolean;
     };
     summary: {
         projectFiles: number;
@@ -168,6 +171,7 @@ export interface ProjectAnalysisResult {
         sources: SourceSinkLocationRecord[];
         sinks: SourceSinkLocationRecord[];
         analyzedMethods: number;
+        solverStatistics?: Readonly<IFDSSolverStatistics>;
         methodLocal: {
             leaks: MethodLocalResourceLeakRecord[];
             analyzedMethods: number;
@@ -236,6 +240,7 @@ const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPat
     maxAccessPathLength: 5,
     maxPropagationDepth: 40,
     reportUnresolvedReturns: false,
+    collectSolverStatistics: false,
     verbose: false,
 };
 
@@ -307,6 +312,7 @@ export class ProjectAnalyzer {
                     maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
                     maxNavigationHops: this.options.maxNavigationHops,
                     maxPropagationDepth: this.options.maxPropagationDepth,
+                    collectSolverStatistics: this.options.collectSolverStatistics,
                 }).runWithDummyMain(dummyMain, creator.getAbilityMethodSet());
                 methodLocalDetector = new ResourceLeakDetector(scene);
                 methodLocalLeaks = methodLocalDetector.detect();
@@ -430,6 +436,7 @@ export class ProjectAnalyzer {
                     maxPropagationDepth: 'enforced',
                 },
                 reportUnresolvedReturns: this.options.reportUnresolvedReturns,
+                collectSolverStatistics: this.options.collectSolverStatistics,
             },
             summary: {
                 projectFiles,
@@ -474,6 +481,9 @@ export class ProjectAnalyzer {
                 sources: sourceLocations,
                 sinks: sinkLocations,
                 analyzedMethods: resourceResult?.statistics.analyzedMethods ?? 0,
+                ...(resourceResult?.statistics.solver
+                    ? { solverStatistics: resourceResult.statistics.solver }
+                    : {}),
                 methodLocal: {
                     leaks: methodLocalLeaks,
                     analyzedMethods: methodLocalDetector?.getAnalyzedMethodCount() ?? 0,

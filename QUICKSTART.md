@@ -128,22 +128,23 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
 ```bash
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --format html \
-  --output out/report.html \
-  --detailed
+  --output out/report.html
 ```
 
 未指定 `--output` 时，报告输出到标准输出。自动化处理和真实项目统计建议使用 JSON；人工审阅可使用 Markdown 或 HTML。
 
-四种格式默认都只输出用户通常需要的内容：项目状态、空指针诊断、跨过程资源泄漏诊断、方法内资源泄漏诊断、核心数量、总耗时以及警告/错误。需要审计分析过程时再增加 `--detailed`：
+四种格式都只输出用户通常需要的内容：项目状态、空指针诊断、跨过程资源泄漏诊断、方法内资源泄漏诊断、核心数量、总耗时以及警告/错误。主报告不再提供详细模式。
+
+需要审计生命周期建模过程时，显式指定独立 JSON 报告路径：
 
 ```bash
 npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
   --format json \
-  --output out/detailed-report.json \
-  --detailed
+  --output out/report.json \
+  --lifecycle-report out/lifecycle-modeling.json
 ```
 
-详细报告额外包含 SDK 与有界参数、Ability、Component、UI 回调、导航、DummyMain、Source/Sink、传播统计和分阶段耗时。`--detailed` 只改变报告内容，不改变分析算法或诊断结果。
+生命周期报告包含建模配置、Ability、Component、UI 回调、导航、DummyMain 和建模分阶段耗时。如需 IFDS 队列与传播统计，另行使用 `--ifds-stats out/solver-statistics.json`。两个参数都不改变分析语义或诊断结果。
 
 ## 6. 解读 JSON 报告
 
@@ -161,7 +162,7 @@ npm run cli -- analyze "/absolute/path/to/HarmonyOSApp" \
 | `warnings` / `errors` | 降级建模、兼容性告警和失败原因。 |
 | `duration.total` | 分析总耗时。 |
 
-使用 `--detailed` 后，JSON 恢复完整分析结果，其中 `settings`、`abilities`、`components`、`navigations`、`dummyMain` 和完整 `duration` 用于复现实验或排查分析过程。
+`abilities`、`components`、`navigations` 和 `dummyMain` 只出现在 `--lifecycle-report` 指定的独立报告中，不会进入用户诊断报告。
 
 可用 Node.js 快速提取关键结果：
 
@@ -198,7 +199,7 @@ NODE_OPTIONS=--max-old-space-size=4096 npm run cli -- analyze "/absolute/path/to
   --output out/report.json
 ```
 
-如果事实规模仍然过大，应使用 `--detailed` 检查分阶段耗时，再逐步降低 `maxPropagationDepth`、`maxCallbackIterations` 或资源流边界；修改边界会影响覆盖范围，复现实验时应保留详细报告中的实际配置。
+如果事实规模仍然过大，应使用 `--ifds-stats` 检查传播数量和队列峰值，并使用 `--lifecycle-report` 检查建模耗时，再逐步降低 `maxPropagationDepth`、`maxCallbackIterations` 或资源流边界；修改边界会影响覆盖范围，复现实验时应保留实际命令行参数。
 
 ### ViewTree 无法完整构建
 

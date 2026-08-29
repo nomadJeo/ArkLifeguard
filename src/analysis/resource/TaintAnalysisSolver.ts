@@ -26,6 +26,10 @@
 
 import { ArkAssignStmt, ArkClass, ArkInvokeStmt, ArkMethod, Scene, Stmt } from '../../adapter/arkanalyzer';
 import { DataflowSolver } from '../../ifds/DataflowSolver';
+import type {
+    DataflowSolverOptions,
+    IFDSSolverStatistics,
+} from '../../ifds/SolverStatistics';
 
 import { TaintFact } from './TaintFact';
 import { TaintAnalysisProblem, TaintAnalysisConfig, ResourceLeak, TaintLeak } from './TaintAnalysisProblem';
@@ -44,8 +48,12 @@ import { LifecycleModelCreator } from '../../lifecycle/LifecycleModelCreator';
 export class TaintAnalysisSolver extends DataflowSolver<TaintFact> {
     private taintProblem: TaintAnalysisProblem;
     
-    constructor(problem: TaintAnalysisProblem, scene: Scene) {
-        super(problem, scene);
+    constructor(
+        problem: TaintAnalysisProblem,
+        scene: Scene,
+        options: DataflowSolverOptions = {}
+    ) {
+        super(problem, scene, options);
         this.taintProblem = problem;
     }
     
@@ -180,7 +188,9 @@ export class TaintAnalysisRunner {
             sourceSinkManager: this.sourceSinkManager,
             abilityMethodMap,
         });
-        const solver = new TaintAnalysisSolver(problem, this.scene);
+        const solver = new TaintAnalysisSolver(problem, this.scene, {
+            collectStatistics: this.config.collectSolverStatistics,
+        });
         solver.solve();
 
         const reachedFacts = solver.getReachedFacts();
@@ -200,6 +210,7 @@ export class TaintAnalysisRunner {
                 sourceCount: problem.getSourceSinkManager().getSourceCount(),
                 sinkCount: problem.getSourceSinkManager().getSinkCount(),
                 duration: Date.now() - startTime,
+                solver: solver.getStatistics(),
             },
         };
     }
@@ -225,7 +236,9 @@ export class TaintAnalysisRunner {
             sourceSinkManager: this.sourceSinkManager,
         });
         
-        const solver = new TaintAnalysisSolver(problem, this.scene);
+        const solver = new TaintAnalysisSolver(problem, this.scene, {
+            collectStatistics: this.config.collectSolverStatistics,
+        });
         solver.solve();
         
         const duration = Date.now() - startTime;
@@ -243,6 +256,7 @@ export class TaintAnalysisRunner {
                 sourceCount: problem.getSourceSinkManager().getSourceCount(),
                 sinkCount: problem.getSourceSinkManager().getSinkCount(),
                 duration,
+                solver: solver.getStatistics(),
             },
         };
     }
@@ -667,6 +681,8 @@ export interface TaintAnalysisResult {
         sinkCount: number;
         /** 耗时（毫秒） */
         duration: number;
+        /** 可选的开发者 IFDS 求解统计。 */
+        solver?: Readonly<IFDSSolverStatistics>;
     };
 }
 

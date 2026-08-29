@@ -3,7 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ProjectAnalysisResult } from '../../src/application';
-import { ReportGenerator } from '../../src/report';
+import {
+    LifecycleReportGenerator,
+    ReportGenerator,
+    SolverStatisticsReportGenerator,
+} from '../../src/report';
 
 const result: ProjectAnalysisResult = {
     schemaVersion: 1,
@@ -32,6 +36,7 @@ const result: ProjectAnalysisResult = {
             maxPropagationDepth: 'enforced',
         },
         reportUnresolvedReturns: false,
+        collectSolverStatistics: false,
     },
     summary: {
         projectFiles: 3,
@@ -129,9 +134,10 @@ const result: ProjectAnalysisResult = {
 
 describe('ReportGenerator', () => {
     it.each(['json', 'text', 'markdown', 'html'] as const)('generates %s reports', format => {
-        const report = new ReportGenerator().generate(result, { format, detailed: true });
+        const report = new ReportGenerator().generate(result, { format });
         expect(report).toContain('project');
-        expect(report).toContain(format === 'json' ? 'maxPropagationDepth' : '40');
+        expect(report).not.toContain('maxPropagationDepth');
+        expect(report).not.toContain('EntryAbility');
     });
 
     it('writes the report to the requested path', () => {
@@ -139,6 +145,44 @@ describe('ReportGenerator', () => {
         new ReportGenerator().generate(result, { format: 'json', outputPath });
         expect(JSON.parse(fs.readFileSync(outputPath, 'utf8')).analysisKind)
             .toBe('lifecycle-nullness');
+    });
+
+    it('writes solver statistics as a separate developer report', () => {
+        const withStatistics: ProjectAnalysisResult = {
+            ...result,
+            settings: { ...result.settings, collectSolverStatistics: true },
+            resourceAnalysis: {
+                ...result.resourceAnalysis,
+                solverStatistics: {
+                    scheduling: 'later-edge-worklist',
+                    solveTimeMs: 12,
+                    propagationAttempts: 8,
+                    deferredPropagationAttempts: 6,
+                    uniqueEdgesEnqueued: 6,
+                    duplicateEdgesSkipped: 2,
+                    deferredDuplicateEdgesSkipped: 2,
+                    processedEdges: 6,
+                    immediateEnqueued: 2,
+                    deferredEnqueued: 4,
+                    maxImmediateQueueSize: 1,
+                    maxDeferredQueueSize: 3,
+                    maxCombinedQueueSize: 4,
+                    maxLaterEdgesSize: 5,
+                    finalLaterEdgesSize: 2,
+                    finalPathEdgeCount: 6,
+                },
+            },
+        };
+        const report = JSON.parse(new SolverStatisticsReportGenerator().generate(withStatistics));
+        expect(report.reportKind).toBe('ifds-solver-statistics');
+        expect(report.resourceAnalysis.statistics.duplicateEdgesSkipped).toBe(2);
+        expect(report).not.toHaveProperty('abilities');
+        expect(report).not.toHaveProperty('components');
+
+        const userReport = JSON.parse(new ReportGenerator().generate(withStatistics, {
+            format: 'json',
+        }));
+        expect(userReport.resourceAnalysis).not.toHaveProperty('solverStatistics');
     });
 
     it('keeps the default JSON report focused on diagnostics', () => {
@@ -158,29 +202,15 @@ describe('ReportGenerator', () => {
         expect(report).not.toHaveProperty('dummyMain');
     });
 
-    it('includes lifecycle and solver internals in detailed JSON reports', () => {
-        const report = JSON.parse(new ReportGenerator().generate(result, {
-            format: 'json',
-            detailed: true,
-        }));
-        expect(report.settings.bounds.maxPropagationDepth).toBe(40);
+    it('writes lifecycle modeling details as a separate report', () => {
+        const report = JSON.parse(new LifecycleReportGenerator().generate(result));
+        expect(report.reportKind).toBe('lifecycle-modeling-details');
+        expect(report.settings.maxCallbackIterations).toBe(1);
         expect(report.abilities).toHaveLength(1);
         expect(report.components).toHaveLength(1);
         expect(report.navigations).toHaveLength(1);
         expect(report.dummyMain.methodSignature).toBe('DummyMain.main()');
+        expect(report).not.toHaveProperty('nullness');
+        expect(report).not.toHaveProperty('resourceAnalysis');
     });
-
-    it.each(['text', 'markdown', 'html'] as const)(
-        'hides lifecycle internals in compact %s reports',
-        format => {
-            const compact = new ReportGenerator().generate(result, { format });
-            const detailed = new ReportGenerator().generate(result, { format, detailed: true });
-            const internalsMarker = format === 'text'
-                ? 'Fact 传播深度上限'
-                : 'maxPropagationDepth';
-            expect(compact).not.toContain('EntryAbility');
-            expect(compact).not.toContain(internalsMarker);
-            expect(detailed).toContain(internalsMarker);
-        }
-    );
 });
