@@ -296,6 +296,52 @@ out/ifds-equality-hash-index-final-real-apps.json
 - 文件：`out/ifds-store-extraction-keepassho.json`
 - SHA-256：`eede4bf6a41106812a04d4f786301c9ac823a9717704a0fae3bf02f1f60d17f3`
 
+## 实验 5：将新 Summary 应用到全部已有 Caller
+
+### 目标
+
+补齐 IFDS 摘要传播的双向时序：`processCallNode` 负责将已有 summary 重放给新 caller，`processExitNode` 负责将新 summary 应用给全部已登记的语义匹配 caller context。本次不跳过 call flow 或 call-to-return flow。
+
+### 是否增加统计
+
+不增加永久运行时统计。该问题是可由最小双 caller 用例确定的正确性缺口，不需要通过真实项目命中率决定是否修复。现有的传播、唯一 Edge 和重复 Edge 统计足以检查性能影响。
+
+### 修复前复现
+
+定向用例预先登记两条语义相同调用点、不同起始 Fact 的 caller PathEdge：
+
+```text
+(callerEntry, CONTEXT_1) -> (callSite, CALL_INPUT)
+(callerEntry, CONTEXT_2) -> (callSite, CALL_INPUT)
+```
+
+产生新 summary 后，修复前实际只得到 `CONTEXT_1`，期望的 `CONTEXT_2` 返回 PathEdge 缺失，定向测试稳定失败。
+
+### 实现
+
+- 提供通用 `applySummaryToIncomingCallers()`，只遍历当前 callee-entry Fact 的 `Incoming` 集合，不扫描全部 PathEdge。
+- 使用 Stmt 身份和 `factEqual()` 筛选与 summary call point 语义匹配的 caller。
+- `addCallSummary()` 的新增结果只用于决定是否启动一次 apply-to-all，不再将传播限制在第一条 caller Edge。
+- NullnessSolver 共用通用实现。
+
+### 验证
+
+- 修复提交：`569bfba fix(ifds): apply summaries to all caller contexts`
+- 双 caller 定向回归修复后通过。
+- TypeScript 源码、测试和脚本类型检查通过。
+- IFDS、Nullness、资源、CLI 和报告聚焦回归：21 个文件、169 个测试通过。
+- ArkDefectBench 保持 TP=37、TN=12、FP=0、FN=3（49/52）。
+- KeePassHO 诊断逐项一致；传播尝试 31,098、唯一/最终 PathEdge 27,989，与修复前相同，说明该项目未触发双 caller 缺口。单次 IFDS 求解耗时为 903 ms，未见明显回归。
+
+### 结论
+
+保留修复。正确性缺口已由最小用例复现并关闭，真实项目单次运行未发现语义或性能回归。不将本次改动解释为 flow 缓存优化。
+
+### 原始报告
+
+- 文件：`out/ifds-summary-existing-callers-keepassho.json`
+- SHA-256：`f76b75d26b922dee552f9509015f9544c9f99e3e441f7ac7635615c5b3b7cac4`
+
 ## 后续实验模板
 
 ```markdown
