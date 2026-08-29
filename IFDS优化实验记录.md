@@ -245,6 +245,57 @@ out/ifds-equality-hash-index-final-real-apps.json
 - 文件：`out/ifds-equality-hash-index-final-real-apps.json`
 - SHA-256：`e88f3733b70cf5e845991ce2fa340d3fe8436f62a26c3bec31c4303a5fc88eeb`
 
+## 实验 4：抽取 PathEdge 存储与 Summary 管理
+
+### 目标
+
+将 PathEdge 存储、语义去重索引从 `DataflowSolver` 抽取为 `PathEdgeStore`，将 incoming edge、end summary 和 call summary 统一抽取为 `SummaryStore`，并让通用 Solver 与 NullnessSolver 共用同一套语义等价与 hash 契约。
+
+### 版本
+
+- 结构基线：`dd4f021 docs(ifds): record solver optimization experiments`
+- 抽取实现：`5b1f552 refactor(ifds): extract edge and summary stores`
+
+### 实现
+
+- `PathEdgeStore` 负责 Edge 存储、分层 hash 索引、冲突安全的语义去重与去重统计。
+- `SummaryStore` 按 Stmt 身份与 Fact 语义管理 incoming、end summary 和 call summary。
+- `DataflowSolver` 仅保留求解流程与调度；`NullnessSolver` 删除自有的 incoming、end-summary 和 call-summary 索引。
+- incoming 保存完整 caller PathEdge，返回传播时不再扫描全部 PathEdge 反查 caller 起点。
+
+### 最小验证
+
+- TypeScript 源码、测试与脚本类型检查通过。
+- IFDS store 的语义去重、hash 冲突、incoming、end summary 和 call summary 单元测试通过：2 个文件、7 个测试。
+- IFDS、Nullness、资源、CLI 和报告聚焦回归通过：21 个文件、168 个测试。
+- ArkDefectBench 保持 TP=37、TN=12、FP=0、FN=3（49/52），与抽取前基线一致。
+- 真实项目只运行 `KeePassHO` 单项目单次实验，用于发现语义或明显性能回归。
+
+### KeePassHO 结果
+
+| 指标 | 抽取前 | 抽取后 | 变化 |
+| --- | ---: | ---: | ---: |
+| 总耗时 | 9,206 ms | 8,833 ms | -4.1% |
+| 资源分析耗时 | 3,859 ms | 3,465 ms | -10.2% |
+| IFDS 求解耗时 | 1,190 ms | 910 ms | -23.5% |
+| 峰值 RSS | 535.05 MB | 498.21 MB | -6.9% |
+| 传播尝试 | 31,416 | 31,098 | -318 |
+| 重复 Edge | 3,427 | 3,109 | -318 |
+| 唯一 / 处理 / 最终 PathEdge | 27,989 | 27,989 | 0 |
+| 跨过程资源泄漏 | 0 | 0 | 0 |
+| 方法内资源候选 | 9 | 9 | 0 |
+
+诊断记录逐项一致。传播尝试减少 318 次，是因为 call summary 改为语义去重后，消除了旧实现按 `PathEdgePoint`/Fact 对象身份判断产生的重复传播；唯一 Edge 与最终结果不变。
+
+### 结论
+
+抽取后的责任边界更清晰，通用和 Nullness Solver 的摘要语义已统一，聚焦测试与单项目诊断均未回归，因此保留。单次 KeePassHO 运行未发现明显性能回归，但不将本次耗时和 RSS 下降宣称为稳定性能收益。
+
+### 原始报告
+
+- 文件：`out/ifds-store-extraction-keepassho.json`
+- SHA-256：`eede4bf6a41106812a04d4f786301c9ac823a9717704a0fae3bf02f1f60d17f3`
+
 ## 后续实验模板
 
 ```markdown
