@@ -187,7 +187,9 @@ function locateProgramPoint(filePath: string, targetLine: number): ProgramPoint 
         const source = lines[lineIndex];
         const classMatch = source.match(/\b(?:class|struct)\s+([A-Za-z_$][\w$]*)/);
         const functionMatch = source.match(/\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/);
-        const methodMatch = source.match(/^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^\{]+)?\{/);
+        const methodMatch = source.match(
+            /^\s*(?:(?:public|private|protected|static|abstract|override|async)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^\{]+)?\{/
+        );
         const callbackMatch = source.match(/\.((?:onClick|then|on))\s*\([^;]*=>\s*\{/) ??
             source.match(/\b(setTimeout)\s*\([^;]*=>\s*\{/);
         const openCount = (source.match(/\{/g) ?? []).length;

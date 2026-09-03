@@ -20,17 +20,32 @@ export abstract class DataflowProblem<D> {
 
     abstract getCallFlowFunction(srcStmt: Stmt, method: ArkMethod): FlowFunction<D>;
 
-    abstract getExitToReturnFlowFunction(
-        srcStmt: Stmt,
-        tgtStmt: Stmt,
-        callStmt: Stmt
-    ): FlowFunction<D>;
+    abstract getExitToReturnFlowFunction(srcStmt: Stmt, tgtStmt: Stmt, callStmt: Stmt): FlowFunction<D>;
 
-    abstract getCallToReturnFlowFunction(
-        srcStmt: Stmt,
-        tgtStmt: Stmt,
-        callees?: ReadonlySet<ArkMethod>
-    ): FlowFunction<D>;
+    abstract getCallToReturnFlowFunction(srcStmt: Stmt, tgtStmt: Stmt, callees?: ReadonlySet<ArkMethod>): FlowFunction<D>;
+
+    /** Transfer facts from a throwing statement to a handler in the same method. */
+    getExceptionalFlowFunction(_srcStmt: Stmt, _handlerStmt: Stmt): FlowFunction<D> {
+        return this.identityFlowFunction();
+    }
+
+    /** Preserve caller-owned facts when a call completes exceptionally. */
+    getCallToExceptionalReturnFlowFunction(
+        _srcStmt: Stmt,
+        _handlerStmt: Stmt,
+        _callees?: ReadonlySet<ArkMethod>
+    ): FlowFunction<D> {
+        return this.identityFlowFunction();
+    }
+
+    /** Map an exceptional callee exit, including its payload, into a caller handler. */
+    getExceptionalExitToReturnFlowFunction(
+        _exitStmt: Stmt,
+        _handlerStmt: Stmt,
+        _callStmt: Stmt
+    ): FlowFunction<D> {
+        return this.identityFlowFunction();
+    }
 
     abstract createZeroValue(): D;
 
@@ -47,6 +62,14 @@ export abstract class DataflowProblem<D> {
      */
     factHash(_fact: D): number {
         return 0;
+    }
+
+    private identityFlowFunction(): FlowFunction<D> {
+        return {
+            getDataFacts(fact: D): Set<D> {
+                return new Set([fact]);
+            },
+        };
     }
 }
 

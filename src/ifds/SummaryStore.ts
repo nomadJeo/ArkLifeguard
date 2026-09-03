@@ -71,11 +71,16 @@ class SemanticPointMap<D, V> {
 export class SummaryStore<D> {
   private readonly incoming: SemanticPointMap<D, Set<PathEdge<D>>>;
   private readonly endSummaries: SemanticPointMap<D, Set<PathEdgePoint<D>>>;
+  private readonly exceptionalEndSummaries: SemanticPointMap<
+    D,
+    Set<PathEdgePoint<D>>
+  >;
   private readonly callSummaries: SemanticPointMap<D, CallSummaryEntry<D>>;
 
   constructor(private readonly semantics: FactSemantics<D>) {
     this.incoming = new SemanticPointMap(semantics);
     this.endSummaries = new SemanticPointMap(semantics);
+    this.exceptionalEndSummaries = new SemanticPointMap(semantics);
     this.callSummaries = new SemanticPointMap(semantics);
   }
 
@@ -95,6 +100,25 @@ export class SummaryStore<D> {
 
   getEndSummaries(entry: PathEdgePoint<D>): ReadonlySet<PathEdgePoint<D>> {
     return this.endSummaries.get(entry) ?? new Set();
+  }
+
+  addExceptionalEndSummary(
+    entry: PathEdgePoint<D>,
+    exit: PathEdgePoint<D>,
+  ): boolean {
+    const summaries = this.exceptionalEndSummaries.getOrCreate(
+      entry,
+      () => new Set(),
+    );
+    const size = summaries.size;
+    summaries.add(exit);
+    return summaries.size !== size;
+  }
+
+  getExceptionalEndSummaries(
+    entry: PathEdgePoint<D>,
+  ): ReadonlySet<PathEdgePoint<D>> {
+    return this.exceptionalEndSummaries.get(entry) ?? new Set();
   }
 
   addCallSummary(
@@ -141,6 +165,7 @@ export class SummaryStore<D> {
   clear(): void {
     this.incoming.clear();
     this.endSummaries.clear();
+    this.exceptionalEndSummaries.clear();
     this.callSummaries.clear();
   }
 }

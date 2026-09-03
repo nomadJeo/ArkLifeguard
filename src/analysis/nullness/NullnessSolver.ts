@@ -78,109 +78,19 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         return edge;
     }
 
-    protected processExitNode(edge: PathEdge<NullnessFact>): void {
-        const startEdgePoint = edge.edgeStart;
-        const exitEdgePoint = edge.edgeEnd;
-        this.summaryStore.addEndSummary(startEdgePoint, exitEdgePoint);
-
-        const callerEdges = this.summaryStore.getIncoming(startEdgePoint);
-        if (!callerEdges) {
-            if (this.rootMethods.has(
-                startEdgePoint.node.getCfg()!.getDeclaringMethod()
-            )) {
-                return;
-            }
-            throw new Error(
-                'incoming does not have ' +
-                startEdgePoint.node.getCfg()?.getDeclaringMethod().toString()
-            );
-        }
-
-        for (const callerEdge of callerEdges) {
-            const callEdgePoint = callerEdge.edgeEnd;
-            const returnSite = this.getReturnSiteOfCall(callEdgePoint.node);
-            if (!returnSite) continue;
-            const returnFlow = this.problem.getExitToReturnFlowFunction(
-                exitEdgePoint.node,
-                returnSite,
-                callEdgePoint.node
-            );
-            for (const fact of returnFlow.getDataFacts(exitEdgePoint.fact)) {
-                const returnSitePoint = new PathEdgePoint(returnSite, fact);
-                if (!this.summaryStore.addCallSummary(callEdgePoint, returnSitePoint)) {
-                    continue;
-                }
-                this.applySummaryToIncomingCallers(
-                    callerEdges,
-                    callEdgePoint,
-                    returnSitePoint
-                );
-            }
-        }
+    protected isRootMethod(method: ArkMethod): boolean {
+        return this.rootMethods.has(method);
     }
 
-    protected processCallNode(edge: PathEdge<NullnessFact>): void {
-        const start = edge.edgeStart;
-        const callEdgePoint = edge.edgeEnd;
-        const returnSite = this.getReturnSiteOfCall(callEdgePoint.node);
-        if (!returnSite) return;
-        const invokeStmt = callEdgePoint.node as ArkInvokeStmt;
-        const callees = this.getCallees(invokeStmt);
-
-        for (const callee of callees) {
-            const cfg = callee.getCfg();
-            if (!cfg) continue;
-            const firstStmt = cfg.getStartingBlock()!.getStmts()[callee.getParameters().length];
-            const callFlow = this.problem.getCallFlowFunction(invokeStmt, callee);
-            for (const fact of callFlow.getDataFacts(callEdgePoint.fact)) {
-                this.callNodeFactPropagate(edge, firstStmt, fact, returnSite);
-            }
-        }
-
-        const callToReturnFlow = this.problem.getCallToReturnFlowFunction(
-            callEdgePoint.node,
-            returnSite,
-            callees
-        );
-        for (const fact of callToReturnFlow.getDataFacts(callEdgePoint.fact)) {
-            this.propagate(new PathEdge(start, new PathEdgePoint(returnSite, fact)));
-        }
-        for (const summaryPoint of this.summaryStore.getCallSummaries(
-            callEdgePoint,
-            returnSite
-        )) {
-            this.propagate(new PathEdge(start, summaryPoint));
-        }
-    }
-
-    protected callNodeFactPropagate(
-        edge: PathEdge<NullnessFact>,
+    protected createCalleeStartPoint(
         firstStmt: Stmt,
-        fact: NullnessFact,
-        returnSite: Stmt
-    ): void {
-        const callEdgePoint = edge.edgeEnd;
-        const rawStartPoint = new PathEdgePoint(firstStmt, fact);
-        const startEdgePoint = new PathEdgePoint(
+        fact: NullnessFact
+    ): PathEdgePoint<NullnessFact> {
+        const rawPoint = new PathEdgePoint(firstStmt, fact);
+        return new PathEdgePoint(
             firstStmt,
-            this.abstractPointFact(rawStartPoint, true)
+            this.abstractPointFact(rawPoint, true)
         );
-        this.propagate(new PathEdge(startEdgePoint, startEdgePoint));
-        this.summaryStore.addIncoming(startEdgePoint, edge);
-
-        for (const exitEdgePoint of this.summaryStore.getEndSummaries(startEdgePoint)) {
-            const returnFlow = this.problem.getExitToReturnFlowFunction(
-                exitEdgePoint.node,
-                returnSite,
-                callEdgePoint.node
-            );
-            for (const returnFact of returnFlow.getDataFacts(exitEdgePoint.fact)) {
-                this.summaryStore.addCallSummary(
-                    callEdgePoint,
-                    new PathEdgePoint(returnSite, returnFact)
-                );
-            }
-        }
     }
 
     getReachedFacts(): Map<Stmt, NullnessFact[]> {
@@ -323,7 +233,7 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         return recursive;
     }
 
-    private getCallees(invokeStmt: ArkInvokeStmt): Set<ArkMethod> {
+    protected getCallees(invokeStmt: ArkInvokeStmt): Set<ArkMethod> {
         const cached = this.calleeCache.get(invokeStmt);
         if (cached) {
             return cached;

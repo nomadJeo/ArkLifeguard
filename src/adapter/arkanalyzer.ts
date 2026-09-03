@@ -19,6 +19,7 @@ export {
   AbstractInvokeExpr,
   StringType,
   ArkConditionExpr,
+  ArkCastExpr,
   ArkAwaitExpr,
   ArkInstanceOfExpr,
   ArkInstanceInvokeExpr,
@@ -30,6 +31,7 @@ export {
   RelationalBinaryOperator,
   UnaryOperator,
   ArkArrayRef,
+  ArkCaughtExceptionRef,
   ArkInstanceFieldRef,
   ArkParameterRef,
   ArkThisRef,
@@ -62,6 +64,7 @@ export {
   CallGraphBuilder,
   addCfg2Stmt,
   SceneConfig,
+  ArkThrowStmt,
 } from "arkanalyzer";
 
 export { Language } from "arkanalyzer/lib/core/model/ArkFile";

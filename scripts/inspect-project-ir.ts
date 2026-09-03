@@ -221,13 +221,33 @@ function appendCfg(lines: string[], method: ArkMethod, verbose: boolean): void {
     }
     const blocks = [...cfg.getBlocks()];
     const blockIndices = new Map(blocks.map((block, index) => [block, index]));
+    const formatBlocks = (targets: typeof blocks): string => targets
+        .map(target => `B${blockIndices.get(target) ?? '?'}`)
+        .join(', ');
     for (const [blockIndex, block] of blocks.entries()) {
-        const successors = block.getSuccessors()
-            .map(successor => `B${blockIndices.get(successor) ?? '?'}`)
-            .join(', ');
-        lines.push(`  B${blockIndex} -> [${successors}]`);
+        const normalSuccessors = formatBlocks(block.getSuccessors());
+        const exceptionalSuccessors = formatBlocks(
+            block.getExceptionalSuccessorBlocks() ?? []
+        );
+        lines.push(
+            `  B${blockIndex} normal -> [${normalSuccessors}], ` +
+            `exceptional -> [${exceptionalSuccessors}]`
+        );
         block.getStmts().forEach((stmt, stmtIndex) => {
             appendStatement(lines, stmt, stmtIndex, verbose);
+        });
+    }
+
+    const traps = method.getBody()?.getTraps() ?? [];
+    if (traps.length > 0) {
+        lines.push('  TRAPS');
+        traps.forEach((trap, trapIndex) => {
+            const tryBlocks = formatBlocks(trap.getTryBlocks());
+            const catchBlocks = formatBlocks(trap.getCatchBlocks());
+            lines.push(
+                `    T${trapIndex} try -> [${tryBlocks}], ` +
+                `catch -> [${catchBlocks}]`
+            );
         });
     }
 }

@@ -22,6 +22,7 @@ import {
 } from '../../adapter/arkanalyzer';
 import {
     ArkAwaitExpr,
+    ArkCastExpr,
     ArkConditionExpr,
     ArkInstanceOfExpr,
     ArkInstanceInvokeExpr,
@@ -34,12 +35,13 @@ import {
 import { Local } from '../../adapter/arkanalyzer';
 import {
     ArkArrayRef,
+    ArkCaughtExceptionRef,
     ArkInstanceFieldRef,
     ArkParameterRef,
     ArkThisRef,
     ClosureFieldRef,
 } from '../../adapter/arkanalyzer';
-import { ArkAssignStmt, ArkIfStmt, ArkReturnStmt, Stmt } from '../../adapter/arkanalyzer';
+import { ArkAssignStmt, ArkIfStmt, ArkReturnStmt, ArkThrowStmt, Stmt } from '../../adapter/arkanalyzer';
 import { DataflowProblem, FlowFunction } from '../../ifds';
 import { ArkClass, ArkMethod } from '../../adapter/arkanalyzer';
 import { CONSTRUCTOR_NAME, ModifierType } from '../../adapter/arkanalyzer';
@@ -419,6 +421,41 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
         };
     }
 
+    getExceptionalFlowFunction(
+        srcStmt: Stmt,
+        handlerStmt: Stmt
+    ): FlowFunction<NullnessFact> {
+        return this.createExceptionalFlowFunction(srcStmt, handlerStmt);
+    }
+
+    getCallToExceptionalReturnFlowFunction(
+        srcStmt: Stmt,
+        _handlerStmt: Stmt,
+        _callees?: ReadonlySet<ArkMethod>
+    ): FlowFunction<NullnessFact> {
+        const problem = this;
+        return {
+            getDataFacts(fact: NullnessFact): Set<NullnessFact> {
+                if (fact.isZeroFact()) {
+                    problem.checkTypedNonNullArguments(srcStmt);
+                    problem.checkLateNullGuard(srcStmt);
+                    problem.recordStaticDereferenceSite(srcStmt);
+                } else {
+                    problem.checkDirectDereference(srcStmt, fact);
+                }
+                return new Set([fact]);
+            },
+        };
+    }
+
+    getExceptionalExitToReturnFlowFunction(
+        exitStmt: Stmt,
+        handlerStmt: Stmt,
+        _callStmt: Stmt
+    ): FlowFunction<NullnessFact> {
+        return this.createExceptionalFlowFunction(exitStmt, handlerStmt);
+    }
+
     createZeroValue(): NullnessFact {
         return this.zeroFact;
     }
@@ -441,6 +478,70 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
 
     getConfig(): Readonly<Required<NullnessAnalysisConfig>> {
         return this.config;
+    }
+
+    private createExceptionalFlowFunction(
+        srcStmt: Stmt,
+        handlerStmt: Stmt
+    ): FlowFunction<NullnessFact> {
+        const problem = this;
+        return {
+            getDataFacts(fact: NullnessFact): Set<NullnessFact> {
+                const result = new Set<NullnessFact>([fact]);
+                if (!(srcStmt instanceof ArkThrowStmt)) {
+                    if (fact.isZeroFact()) {
+                        problem.checkTypedNonNullArguments(srcStmt);
+                        problem.checkLateNullGuard(srcStmt);
+                        problem.recordStaticDereferenceSite(srcStmt);
+                    } else {
+                        problem.checkDirectDereference(srcStmt, fact);
+                    }
+                    return result;
+                }
+
+                const caughtPath = problem.getCaughtExceptionPath(handlerStmt);
+                if (caughtPath.isEmpty()) return result;
+                const thrownValue = srcStmt.getOp();
+                if (fact.isZeroFact()) {
+                    const kind = problem.getLiteralNullnessKind(thrownValue);
+                    if (kind) {
+                        result.add(NullnessFact.create(caughtPath, kind, {
+                            kind: kind === NullnessKind.Null
+                                ? NullnessOriginKind.NullLiteral
+                                : NullnessOriginKind.UndefinedLiteral,
+                            stmt: srcStmt,
+                            description: `${kind} value thrown into catch`,
+                        }));
+                    }
+                    return result;
+                }
+
+                const thrownPath = NullnessAccessPath.fromValue(thrownValue);
+                if (thrownPath.isEmpty() ||
+                    !thrownPath.isPrefixOf(fact.accessPath)) {
+                    return result;
+                }
+                const remainingFields = fact.accessPath
+                    .remainingFieldsAfter(thrownPath);
+                result.add(fact.deriveWithNewAccessPath(
+                    new NullnessAccessPath(
+                        caughtPath.base,
+                        caughtPath.baseType,
+                        [...caughtPath.fields, ...remainingFields]
+                    ),
+                    srcStmt
+                ));
+                return result;
+            },
+        };
+    }
+
+    private getCaughtExceptionPath(handlerStmt: Stmt): NullnessAccessPath {
+        if (!(handlerStmt instanceof ArkAssignStmt) ||
+            !(handlerStmt.getRightOp() instanceof ArkCaughtExceptionRef)) {
+            return NullnessAccessPath.getEmptyAccessPath();
+        }
+        return NullnessAccessPath.fromValue(handlerStmt.getLeftOp());
     }
 
     getNullDereferences(): readonly NullDereferenceDiagnostic[] {
@@ -1099,7 +1200,9 @@ export class NullnessProblem extends DataflowProblem<NullnessFact> {
         // this ordinary IR node so project-defined async returns keep their facts.
         const propagatedValue = rightOp instanceof ArkAwaitExpr
             ? rightOp.getPromise()
-            : rightOp;
+            : rightOp instanceof ArkCastExpr
+                ? rightOp.getOp()
+                : rightOp;
         const rightPath = NullnessAccessPath.fromValue(propagatedValue);
         if (rightPath.isEmpty() || !rightPath.isPrefixOf(fact.accessPath)) {
             return result;

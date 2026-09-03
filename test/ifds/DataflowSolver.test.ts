@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import 'arkanalyzer';
 import {
     ArkMethod,
+    ArkThrowStmt,
     Scene,
     SceneConfig,
     Stmt,
@@ -72,6 +73,22 @@ class IdentityProblem extends DataflowProblem<string> {
     }
 }
 
+class ExceptionalPayloadProblem extends IdentityProblem {
+    getExceptionalExitToReturnFlowFunction(
+        exitStmt: Stmt,
+        _handlerStmt: Stmt,
+        _callStmt: Stmt
+    ): FlowFunction<string> {
+        return {
+            getDataFacts(fact: string): Set<string> {
+                return exitStmt instanceof ArkThrowStmt
+                    ? new Set([fact, 'THROWN_PAYLOAD'])
+                    : new Set([fact]);
+            },
+        };
+    }
+}
+
 class IdentitySolver extends DataflowSolver<string> {
     enqueueForTest(edge: PathEdge<string>, deferred = false): boolean {
         return this.propagate(edge, deferred);
@@ -81,6 +98,14 @@ class IdentitySolver extends DataflowSolver<string> {
         const result: PathEdge<string>[] = [];
         while (this.hasPendingEdge()) result.push(this.takeNextEdge()!);
         return result;
+    }
+
+    getNormalChildrenForTest(stmt: Stmt): Stmt[] {
+        return this.getNormalChildren(stmt);
+    }
+
+    getExceptionalChildrenForTest(stmt: Stmt): Stmt[] {
+        return this.getExceptionalChildren(stmt);
     }
 }
 
@@ -177,13 +202,13 @@ class SemanticIdentitySolver extends DataflowSolver<SemanticFact> {
     }
 }
 
-function buildScene(): Scene {
+function buildScene(fixture = 'normal-flow'): Scene {
     const projectPath = path.resolve(
         __dirname,
-        '../fixtures/ifds/normal-flow'
+        `../fixtures/ifds/${fixture}`
     );
     const config = new SceneConfig();
-    config.buildConfig('ifds-normal-flow', projectPath, []);
+    config.buildConfig(`ifds-${fixture}`, projectPath, []);
     config.buildFromProjectDir(projectPath);
     const scene = new Scene();
     scene.buildSceneFromProjectDir(config);
@@ -220,6 +245,155 @@ describe('IFDS migration smoke tests', () => {
         for (const stmt of cfg!.getStmts()) {
             expect(reachedStatements.has(stmt), stmt.toString()).toBe(true);
         }
+    });
+
+    it('routes an explicit throw only to its exceptional successor', () => {
+        const scene = buildScene('exception-flow');
+        const method = scene.getMethods().find(candidate => candidate.getName() === 'run');
+        expect(method).toBeDefined();
+        const cfg = method!.getCfg();
+        expect(cfg).toBeDefined();
+
+        const throwStmt = cfg!.getStmts().find(
+            (stmt): stmt is ArkThrowStmt => stmt instanceof ArkThrowStmt
+        );
+        expect(throwStmt).toBeDefined();
+        const throwBlock = [...cfg!.getBlocks()].find(block =>
+            block.getStmts().includes(throwStmt!)
+        );
+        expect(throwBlock).toBeDefined();
+        const catchEntry = throwBlock!.getExceptionalSuccessorBlocks()?.[0]?.getHead();
+        expect(catchEntry).toBeDefined();
+        const catchContinuation = throwBlock!
+            .getExceptionalSuccessorBlocks()?.[0]?.getStmts()[1];
+        expect(catchContinuation).toBeDefined();
+
+        const problem = new IdentityProblem(cfg!.getStartingStmt(), method!);
+        const solver = new IdentitySolver(problem, scene);
+        solver.solve();
+
+        expect(solver.getNormalChildrenForTest(throwStmt!)).toEqual([]);
+        expect(solver.getExceptionalChildrenForTest(throwStmt!)).toEqual([catchEntry]);
+        const reachedStatements = new Set(
+            [...solver.getPathEdgeSet()].map(edge => edge.edgeEnd.node)
+        );
+        expect(reachedStatements.has(catchContinuation!)).toBe(true);
+    });
+
+    it('routes a callee exceptional exit to the caller catch', () => {
+        const scene = buildScene('exception-flow');
+        const method = scene.getMethods().find(
+            candidate => candidate.getName() === 'callAndCatch'
+        );
+        expect(method).toBeDefined();
+        const cfg = method!.getCfg()!;
+        const call = cfg.getStmts().find(stmt =>
+            stmt.getInvokeExpr()?.getMethodSignature()
+                .getMethodSubSignature().getMethodName() === 'fail'
+        );
+        expect(call).toBeDefined();
+        const callBlock = [...cfg.getBlocks()].find(block =>
+            block.getStmts().includes(call!)
+        );
+        const catchEntry = callBlock?.getExceptionalSuccessorBlocks()?.[0]?.getHead();
+        expect(catchEntry).toBeDefined();
+        const catchContinuation = callBlock
+            ?.getExceptionalSuccessorBlocks()?.[0]?.getStmts()[1];
+        expect(catchContinuation).toBeDefined();
+
+        const solver = new IdentitySolver(
+            new IdentityProblem(cfg.getStartingStmt(), method!),
+            scene
+        );
+        solver.solve();
+        const reachedStatements = new Set(
+            [...solver.getPathEdgeSet()].map(edge => edge.edgeEnd.node)
+        );
+
+        expect(reachedStatements.has(catchContinuation!)).toBe(true);
+    });
+
+    it('carries an exceptional payload through an uncaught intermediate callee', () => {
+        const scene = buildScene('exception-flow');
+        const method = scene.getMethods().find(
+            candidate => candidate.getName() === 'callThroughMiddleAndCatch'
+        );
+        expect(method).toBeDefined();
+        const cfg = method!.getCfg()!;
+        const call = cfg.getStmts().find(stmt =>
+            stmt.getInvokeExpr()?.getMethodSignature()
+                .getMethodSubSignature().getMethodName() === 'middle'
+        );
+        const callBlock = [...cfg.getBlocks()].find(block =>
+            block.getStmts().includes(call!)
+        );
+        const catchBlock = callBlock?.getExceptionalSuccessorBlocks()?.[0];
+        expect(catchBlock).toBeDefined();
+
+        const solver = new IdentitySolver(
+            new ExceptionalPayloadProblem(cfg.getStartingStmt(), method!),
+            scene
+        );
+        solver.solve();
+        const catchStatements = new Set(catchBlock!.getStmts());
+        const caughtPayload = [...solver.getPathEdgeSet()].some(edge =>
+            catchStatements.has(edge.edgeEnd.node) &&
+            edge.edgeEnd.fact === 'THROWN_PAYLOAD'
+        );
+
+        expect(caughtPayload).toBe(true);
+    });
+
+    it('does not enter a catch when the try body cannot throw', () => {
+        const scene = buildScene('exception-flow');
+        const method = scene.getMethods().find(
+            candidate => candidate.getName() === 'noThrowCatch'
+        );
+        expect(method).toBeDefined();
+        const cfg = method!.getCfg()!;
+        const catchEntry = [...cfg.getBlocks()]
+            .flatMap(block => block.getExceptionalSuccessorBlocks() ?? [])
+            .map(block => block.getHead())
+            .find((stmt): stmt is Stmt => stmt !== null);
+        expect(catchEntry).toBeDefined();
+
+        const solver = new IdentitySolver(
+            new IdentityProblem(cfg.getStartingStmt(), method!),
+            scene
+        );
+        solver.solve();
+        const reachedStatements = new Set(
+            [...solver.getPathEdgeSet()].map(edge => edge.edgeEnd.node)
+        );
+
+        expect(reachedStatements.has(catchEntry!)).toBe(false);
+    });
+
+    it('does not fall through after an uncaught throw', () => {
+        const scene = buildScene('exception-flow');
+        const method = scene.getMethods().find(
+            candidate => candidate.getName() === 'uncaughtThrow'
+        );
+        expect(method).toBeDefined();
+        const cfg = method!.getCfg()!;
+        const throwStmt = cfg.getStmts().find(
+            (stmt): stmt is ArkThrowStmt => stmt instanceof ArkThrowStmt
+        );
+        const unreachableReturn = cfg.getStmts().find(stmt => stmt.toString() === 'return 1');
+        expect(throwStmt).toBeDefined();
+        expect(unreachableReturn).toBeDefined();
+
+        const solver = new IdentitySolver(
+            new IdentityProblem(cfg.getStartingStmt(), method!),
+            scene
+        );
+        solver.solve();
+        const reachedStatements = new Set(
+            [...solver.getPathEdgeSet()].map(edge => edge.edgeEnd.node)
+        );
+
+        expect(reachedStatements.has(throwStmt!)).toBe(true);
+        expect(reachedStatements.has(unreachableReturn!)).toBe(false);
     });
 
     it('prioritizes immediate FIFO work over deferred LIFO work', () => {

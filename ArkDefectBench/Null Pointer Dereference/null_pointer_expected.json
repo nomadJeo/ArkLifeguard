@@ -230,6 +230,180 @@
       }
     },
     {
+      "id": "ExceptionFlow.ConditionalThrowCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "conditional-throw", "catch"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.CaughtNullDereference",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "implicit-throw", "caught-null-dereference"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.CatchThrownNull",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "throw-value", "catch-parameter"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.RethrowOuterCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "nested-try", "rethrow", "outer-catch"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.InterproceduralThrowCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "interprocedural", "exceptional-return"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "fail" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "ExceptionFlow.ImplicitCallThrowCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "implicit-throw", "library-call", "catch"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.TryCatchFinally",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "catch", "finally", "completion-order"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.ReturnThroughFinally",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "return", "finally", "completion-order"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "finish" },
+        "dereference": { "class": "EntryAbility", "method": "finish" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "finish" }
+        ]
+      }
+    },
+    {
+      "id": "ExceptionFlow.FinallyOverridesThrow",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "finally", "throw-value", "completion-override"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.UncaughtThrowStopsFlow",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "uncaught-throw", "unreachable-code"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.NoThrowSkipsCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "safe-path", "unreachable-catch"],
+      "expected": {
+        "bug": false,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [{ "class": "EntryAbility", "method": "onCreate" }]
+      }
+    },
+    {
+      "id": "ExceptionFlow.AsyncAwaitCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "async", "await", "rejection", "catch"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "run" },
+        "dereference": { "class": "EntryAbility", "method": "run" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "run" },
+          { "class": "EntryAbility", "method": "failAsync" },
+          { "class": "EntryAbility", "method": "run" }
+        ]
+      }
+    },
+    {
+      "id": "ExceptionFlow.PromiseCatch",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "async", "promise", "rejection-callback"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "failAsync" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
+      "id": "ExceptionFlow.PromiseFinally",
+      "category": ["ExceptionFlow"],
+      "features": ["exception-aware", "async", "promise", "finally-callback"],
+      "expected": {
+        "bug": true,
+        "nullOrigin": { "class": "EntryAbility", "method": "onCreate" },
+        "dereference": { "class": "EntryAbility", "method": "onCreate" },
+        "executionPath": [
+          { "class": "EntryAbility", "method": "onCreate" },
+          { "class": "EntryAbility", "method": "failAsync" },
+          { "class": "EntryAbility", "method": "onCreate" }
+        ]
+      }
+    },
+    {
       "id": "Lifecycle.Ability.InitBeforeUse",
       "category": ["Lifecycle", "Ability"],
       "features": ["lifecycle-aware", "field-sensitive"],
