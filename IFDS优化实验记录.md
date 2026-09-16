@@ -169,6 +169,8 @@ npm run test:resource:real-apps -- \
 
 在 `DataflowProblem` 中增加兼容的 `factHash()` 契约，在通用 `DataflowSolver` 中建立 PathEdge 语义哈希索引，并将 NullnessSolver 原有的专用 Edge 索引迁移到通用框架。
 
+本实验的正式数据集为 `HarmonyRealApps/meta.json` 中的**全部 48 个真实应用**，
+
 ### 版本
 
 - 基线提交：`9c4911d feat(ifds): measure semantic deduplication cost`
@@ -176,12 +178,28 @@ npm run test:resource:real-apps -- \
 
 ### 实现
 
-- `DataflowProblem.factHash()` 默认返回 `0`，未适配的旧问题仍保持正确，但会退化为单桶。
-- `NullnessProblem` 和 `TaintAnalysisProblem` 使用各自 Fact 的 `hashCode()`。
-- PathEdge 按“起点 Stmt 身份 → 终点 Stmt 身份 → 起点 Fact hash → 终点 Fact hash”建立分层 Map。
-- hash 只用于缩小候选集，桶内仍使用 `factEqual()` 防止哈希冲突导致错误去重。
-- `computeResult()` 的 Fact 比较同步改为 `factEqual()`。
-- NullnessSolver 删除了专用 `pathEdgeIndex`、Edge hash 和 Edge/Point 重复比较实现，复用通用 Solver 能力。
+- 基线线性扫描全部 `pathEdgeSet`；优化按起点/终点 Stmt 身份和两端 Fact hash 分层索引，只扫描命中的桶。
+- hash 仅缩小候选集，最终仍以 `factEqual()` 判重，故 hash 碰撞不影响正确性；默认 hash 为 `0` 时保持正确但退化为单桶。
+
+### 48 项正式实验
+
+2026-09-08 在两个独立的干净副本中分别检出上述提交；共享同一份 `HarmonyRealApps/meta.json`（SHA-256：`6c78f0f03419165fdd1dde6c9e3387e1700f21cf8be977c4d721397e1bb590d2`）和 `sdk/default`。不传 `--project` 或 `--limit`，因此两个版本均分析 48 项。参数均为 `--timeout-ms 180000 --callback-iterations 1 --max-abilities-per-flow 3 --max-navigation-hops 5 --max-propagation-depth 40 --ifds-stats`；Node.js `v22.19.0`，AMD Ryzen 7 7840HS，27 GiB 内存。
+
+两个报告均为 48/48 成功、0 失败、0 超时。逐项目比较的三类诊断记录（跨过程资源泄漏、污点泄漏、方法内候选）以及 `propagationAttempts`、`uniqueEdgesEnqueued`、`duplicateEdgesSkipped`、`processedEdges`、`finalPathEdgeCount` 全部一致；因此以下性能数据是在相同传播结果上的比较。
+
+| 指标 | `9c4911d` | `0b1e9af` | 变化 |
+| --- | ---: | ---: | ---: |
+| 项目成功 / 失败 / 超时 | 48 / 0 / 0 | 48 / 0 / 0 | 一致 |
+| 跨过程资源泄漏 / 污点泄漏 / 方法内候选 | 21 / 0 / 307 | 21 / 0 / 307 | 一致 |
+| 项目总耗时之和 | 253,884 ms | 184,470 ms | -27.3% |
+| 资源分析耗时之和 | 101,021 ms | 33,142 ms | -67.2% |
+| IFDS 求解耗时之和 | 82,093 ms | 14,169 ms | -82.7% |
+| 去重候选扫描 | 6,272,462,673 | 54,846 | -99.9991% |
+| `factEqual()` 调用 | 6,274,692,463 | 103,916 | -99.9983% |
+| 最大单次候选扫描 | 84,337 | 58 | -99.93% |
+| 平均 / 最大峰值 RSS | 329.13 / 476.96 MB | 339.02 / 538.05 MB | +3.0% / +12.8% |
+
+47 个项目的 IFDS 求解耗时下降，1 个极短项目 `MiShop_HarmonyOS` 从 38 ms 到 39 ms；配对中位加速比为 1.42×，几何平均加速比为 1.65×。这是单轮结果，说明索引显著消除了判重成本；内存指标上升，因此不宣称内存收益。
 
 ### 实现过程记录
 
@@ -192,7 +210,7 @@ npm run test:resource:real-apps -- \
 - 文件：`out/ifds-equality-hash-index-real-apps.json`
 - SHA-256：`a3e2b50df1fd9b65e38a2a33adc83125d610363f0545539f00cc29f7c6ca2aca`
 
-### 项目与命令
+### 五项目预实验
 
 与实验 2 使用完全相同的五个真实项目和分析参数，仅将输出改为：
 
@@ -200,7 +218,7 @@ npm run test:resource:real-apps -- \
 out/ifds-equality-hash-index-final-real-apps.json
 ```
 
-### 汇总结果
+### 五项目预实验汇总结果
 
 | 指标 | 线性扫描 | 分层 hash 索引 | 变化 |
 | --- | ---: | ---: | ---: |
@@ -217,7 +235,7 @@ out/ifds-equality-hash-index-final-real-apps.json
 | 最大单次候选扫描 | 84,337 | 58 | -99.93% |
 | 最大待处理队列 | 301 | 301 | 0 |
 
-### 逐项目结果
+### 五项目预实验逐项目结果
 
 | 项目 | 基线 IFDS | 优化后 IFDS | 变化 | 基线候选扫描 | 优化后候选扫描 |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -227,7 +245,7 @@ out/ifds-equality-hash-index-final-real-apps.json
 | KeePassHO | 6,299 ms | 1,190 ms | -81.1% | 429,464,777 | 3,427 |
 | LinysBrowser_NEXT | 107,530 ms | 3,439 ms | -96.8% | 3,871,680,960 | 12,126 |
 
-### 正确性核对
+### 五项目预实验正确性核对
 
 - 五个真实项目的跨过程资源泄漏、污点泄漏和方法内候选记录逐项一致。
 - `propagationAttempts`、`uniqueEdgesEnqueued`、`duplicateEdgesSkipped`、`processedEdges` 和 `finalPathEdgeCount` 一致。
@@ -238,12 +256,14 @@ out/ifds-equality-hash-index-final-real-apps.json
 
 ### 结论
 
-优化在诊断和 IFDS 传播结果不变的前提下，大幅降低了去重扫描和求解时间，效果在五个项目上一致，应保留。平均峰值 RSS 略有下降，但最大单项目 RSS 从 531.55 MB 增加到 535.05 MB，因此不宣称稳定的内存收益。
+48 项正式复测确认：该索引在诊断和 IFDS 传播结果不变的前提下显著降低判重开销，并使 47/48 个项目的 IFDS 求解更快，因此保留。RSS 平均值和最大值均上升，不宣称内存收益；耗时结论来自单轮配对运行，后续若需要方差结论再进行多轮复测。
 
 ### 原始报告
 
 - 文件：`out/ifds-equality-hash-index-final-real-apps.json`
 - SHA-256：`e88f3733b70cf5e845991ce2fa340d3fe8436f62a26c3bec31c4303a5fc88eeb`
+- 48 项基线报告：`/tmp/arklifeguard-ifds-eval.Zh7loh/ifds-experiment-3-48-baseline-r1.json`，SHA-256：`412b32985cf2086a4271d37e5f8074405849e0a9e8563bcf7aca0773302a3508`
+- 48 项优化报告：`/tmp/arklifeguard-ifds-eval.Zh7loh/ifds-experiment-3-48-optimized-r1.json`，SHA-256：`eb1c36ceced9340abd32afa79666a7aabcc251477688ad3feaffc7fe383a18ef`
 
 ## 实验 4：抽取 PathEdge 存储与 Summary 管理
 

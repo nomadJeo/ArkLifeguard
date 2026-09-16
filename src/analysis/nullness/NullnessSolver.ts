@@ -14,11 +14,9 @@
  */
 
 import type { Scene } from '../../adapter/arkanalyzer';
-import { ArkAssignStmt, ArkInvokeStmt, Stmt } from '../../adapter/arkanalyzer';
+import { Stmt } from '../../adapter/arkanalyzer';
 import { PathEdge, PathEdgePoint } from '../../ifds';
 import { ArkMethod } from '../../adapter/arkanalyzer';
-import { FunctionType } from '../../adapter/arkanalyzer';
-import { getRecallMethodInParam } from '../../ifds';
 // Import through ArkAnalyzer's public barrel. Directly loading DataflowSolver before
 // Scene is initialized exposes the existing ArkFile -> src/index circular dependency.
 import { DataflowSolver } from '../../ifds';
@@ -26,6 +24,7 @@ import type { DataflowSolverOptions } from '../../ifds';
 import { NullnessFact } from './NullnessFact';
 import { NullnessProblem } from './NullnessProblem';
 import { resolveProjectMethods } from './ProjectMethodResolver';
+import { NullnessInterproceduralCFG } from './NullnessInterproceduralCFG';
 
 export interface NullnessSolverRoot {
     entryPoint: Stmt;
@@ -34,8 +33,6 @@ export interface NullnessSolverRoot {
 
 /** Thin typed facade over ArkAnalyzer's generic IFDS solver. */
 export class NullnessSolver extends DataflowSolver<NullnessFact> {
-    /** Callee resolution depends on the invoke statement, never on the input fact. */
-    private readonly calleeCache = new Map<ArkInvokeStmt, Set<ArkMethod>>();
     private readonly recursiveMethods: Set<ArkMethod>;
     private readonly largeProjectWidening: boolean;
 
@@ -47,7 +44,7 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         private readonly additionalRoots: readonly NullnessSolverRoot[] = [],
         options: DataflowSolverOptions = {}
     ) {
-        super(problem, scene, options);
+        super(problem, scene, options, new NullnessInterproceduralCFG(scene));
         this.recursiveMethods = this.findRecursiveMethods(scene);
         this.largeProjectWidening = scene.getMethods().length >=
             problem.getConfig().largeProjectWideningThreshold;
@@ -58,7 +55,6 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
     }
 
     protected init(): void {
-        this.calleeCache.clear();
         super.init();
         for (const root of this.additionalRoots) {
             const rootPoint = new PathEdgePoint(root.entryPoint, this.zeroFact);
@@ -233,35 +229,4 @@ export class NullnessSolver extends DataflowSolver<NullnessFact> {
         return recursive;
     }
 
-    protected getCallees(invokeStmt: ArkInvokeStmt): Set<ArkMethod> {
-        const cached = this.calleeCache.get(invokeStmt);
-        if (cached) {
-            return cached;
-        }
-
-        const callees = resolveProjectMethods(this.scene, invokeStmt);
-        const declaringFile = invokeStmt.getInvokeExpr()
-            .getMethodSignature().getDeclaringClassSignature().getDeclaringFileSignature();
-        if (this.scene.getFile(declaringFile)) {
-            for (const callee of this.getAllCalleeMethods(invokeStmt)) {
-                callees.add(callee);
-            }
-        } else {
-            const recalled = getRecallMethodInParam(invokeStmt);
-            if (recalled) callees.add(recalled);
-        }
-        this.calleeCache.set(invokeStmt, callees);
-        return callees;
-    }
-
-    protected isCallStatement(stmt: Stmt): boolean {
-        if (super.isCallStatement(stmt)) return true;
-        if (resolveProjectMethods(this.scene, stmt).size > 0) return true;
-        if (!(stmt instanceof ArkAssignStmt)) return false;
-        const invoke = stmt.getInvokeExpr();
-        if (!invoke) return false;
-        const methodName = invoke.getMethodSignature().getMethodSubSignature().getMethodName();
-        return (methodName === 'then' || methodName === 'catch' || methodName === 'finally') &&
-            invoke.getArgs().some(argument => argument.getType() instanceof FunctionType);
-    }
 }

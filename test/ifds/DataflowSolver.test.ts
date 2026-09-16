@@ -12,6 +12,7 @@ import {
     DataflowProblem,
     DataflowSolver,
     FlowFunction,
+    ArkInterproceduralCFG,
     PathEdge,
     PathEdgePoint,
 } from '../../src/ifds';
@@ -100,12 +101,23 @@ class IdentitySolver extends DataflowSolver<string> {
         return result;
     }
 
-    getNormalChildrenForTest(stmt: Stmt): Stmt[] {
-        return this.getNormalChildren(stmt);
+}
+
+class SummaryTestICFG extends ArkInterproceduralCFG {
+    constructor(
+        scene: Scene,
+        private readonly returnSite: Stmt,
+        private readonly callerEntry: Stmt
+    ) {
+        super(scene);
     }
 
-    getExceptionalChildrenForTest(stmt: Stmt): Stmt[] {
-        return this.getExceptionalChildren(stmt);
+    override getReturnSiteOfCallAt(): Stmt {
+        return this.returnSite;
+    }
+
+    override getStartPointOfCaller(): Stmt {
+        return this.callerEntry;
     }
 }
 
@@ -113,10 +125,15 @@ class SummaryPropagationSolver extends IdentitySolver {
     constructor(
         problem: IdentityProblem,
         scene: Scene,
-        private readonly returnSite: Stmt,
-        private readonly callerEntry: Stmt
+        returnSite: Stmt,
+        callerEntry: Stmt
     ) {
-        super(problem, scene);
+        super(
+            problem,
+            scene,
+            {},
+            new SummaryTestICFG(scene, returnSite, callerEntry)
+        );
     }
 
     addIncomingForTest(
@@ -130,13 +147,6 @@ class SummaryPropagationSolver extends IdentitySolver {
         this.processExitNode(edge);
     }
 
-    protected getReturnSiteOfCall(): Stmt {
-        return this.returnSite;
-    }
-
-    protected getStartOfCallerMethod(): Stmt {
-        return this.callerEntry;
-    }
 }
 
 interface SemanticFact {
@@ -269,11 +279,12 @@ describe('IFDS migration smoke tests', () => {
         expect(catchContinuation).toBeDefined();
 
         const problem = new IdentityProblem(cfg!.getStartingStmt(), method!);
-        const solver = new IdentitySolver(problem, scene);
+        const icfg = new ArkInterproceduralCFG(scene);
+        const solver = new IdentitySolver(problem, scene, {}, icfg);
         solver.solve();
 
-        expect(solver.getNormalChildrenForTest(throwStmt!)).toEqual([]);
-        expect(solver.getExceptionalChildrenForTest(throwStmt!)).toEqual([catchEntry]);
+        expect(icfg.getNormalSuccessors(throwStmt!)).toEqual([]);
+        expect(icfg.getExceptionalSuccessors(throwStmt!)).toEqual([catchEntry]);
         const reachedStatements = new Set(
             [...solver.getPathEdgeSet()].map(edge => edge.edgeEnd.node)
         );
