@@ -10,8 +10,11 @@ import { Scene, SceneConfig, Sdk } from '../adapter/arkanalyzer';
 import {
     AbilityInfo,
     ComponentInfo,
+    createLifecycleModelCreator,
     DEFAULT_LIFECYCLE_CONFIG,
+    DEFAULT_LIFECYCLE_MODEL_MODE,
     LifecycleModelCreator,
+    LifecycleModelMode,
     NavigationAnalyzer,
 } from '../lifecycle';
 import {
@@ -33,6 +36,7 @@ export interface ProjectAnalysisOptions {
     analyzeNavigation?: boolean;
     runNullness?: boolean;
     runResourceAnalysis?: boolean;
+    lifecycleModel?: LifecycleModelMode;
     maxCallbackIterations?: number;
     maxAbilitiesPerFlow?: number;
     maxNavigationHops?: number;
@@ -112,6 +116,7 @@ export interface ProjectAnalysisResult {
         analyzeNavigation: boolean;
         runNullness: boolean;
         runResourceAnalysis: boolean;
+        lifecycleModel: LifecycleModelMode;
         bounds: {
             maxCallbackIterations: number;
             maxAbilitiesPerFlow: number;
@@ -120,7 +125,7 @@ export interface ProjectAnalysisResult {
             maxPropagationDepth: number;
         };
         boundEnforcement: {
-            maxCallbackIterations: 'enforced';
+            maxCallbackIterations: 'enforced' | 'inactive-with-back-edge-model';
             maxAbilitiesPerFlow: 'enforced' | 'inactive-without-resource-analysis';
             maxNavigationHops: 'enforced' | 'inactive-without-resource-analysis';
             maxAccessPathLength: 'enforced';
@@ -234,6 +239,7 @@ const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPat
     analyzeNavigation: true,
     runNullness: true,
     runResourceAnalysis: true,
+    lifecycleModel: DEFAULT_LIFECYCLE_MODEL_MODE,
     maxCallbackIterations: DEFAULT_LIFECYCLE_CONFIG.bounds.maxCallbackIterations,
     maxAbilitiesPerFlow: DEFAULT_LIFECYCLE_CONFIG.bounds.maxAbilitiesPerFlow,
     maxNavigationHops: DEFAULT_LIFECYCLE_CONFIG.bounds.maxNavigationHops,
@@ -272,7 +278,7 @@ export class ProjectAnalyzer {
 
         const lifecycleStart = Date.now();
         const creator = this.withLifecycleConsole(() => {
-            const lifecycleCreator = new LifecycleModelCreator(scene, {
+            const lifecycleCreator = createLifecycleModelCreator(scene, this.options.lifecycleModel, {
                 lifecycleOrder: NULLNESS_LIFECYCLE_ORDER,
                 enableViewTreeParsing: this.options.extractUICallbacks,
                 bounds: {
@@ -417,6 +423,7 @@ export class ProjectAnalyzer {
                 analyzeNavigation: this.options.analyzeNavigation,
                 runNullness: this.options.runNullness,
                 runResourceAnalysis: this.options.runResourceAnalysis,
+                lifecycleModel: this.options.lifecycleModel,
                 bounds: {
                     maxCallbackIterations: this.options.maxCallbackIterations,
                     maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
@@ -425,7 +432,9 @@ export class ProjectAnalyzer {
                     maxPropagationDepth: this.options.maxPropagationDepth,
                 },
                 boundEnforcement: {
-                    maxCallbackIterations: 'enforced',
+                    maxCallbackIterations: this.options.lifecycleModel === 'bounded-unroll'
+                        ? 'enforced'
+                        : 'inactive-with-back-edge-model',
                     maxAbilitiesPerFlow: this.options.runResourceAnalysis
                         ? 'enforced'
                         : 'inactive-without-resource-analysis',

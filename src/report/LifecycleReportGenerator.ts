@@ -13,6 +13,7 @@ export interface LifecycleModelingReport {
     reportKind: 'lifecycle-modeling-details';
     project: ProjectAnalysisResult['project'];
     settings: {
+        lifecycleModel: ProjectAnalysisResult['settings']['lifecycleModel'];
         extractUICallbacks: boolean;
         analyzeNavigation: boolean;
         maxCallbackIterations: number;
@@ -43,6 +44,7 @@ export class LifecycleReportGenerator {
             reportKind: 'lifecycle-modeling-details',
             project: result.project,
             settings: {
+                lifecycleModel: result.settings.lifecycleModel,
                 extractUICallbacks: result.settings.extractUICallbacks,
                 analyzeNavigation: result.settings.analyzeNavigation,
                 maxCallbackIterations: result.settings.bounds.maxCallbackIterations,

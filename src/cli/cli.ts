@@ -12,6 +12,7 @@ import {
     Option,
 } from 'commander';
 import { ProjectAnalysisOptions, ProjectAnalyzer } from '../application';
+import type { LifecycleModelMode } from '../lifecycle';
 import {
     LifecycleReportGenerator,
     ReportFormat,
@@ -31,6 +32,7 @@ interface AnalyzeCliOptions {
     navigation: boolean;
     uiCallbacks: boolean;
     checks: AnalysisCheck[];
+    lifecycleModel: LifecycleModelMode;
     maxCallbackIterations: number;
     maxAbilitiesPerFlow: number;
     maxNavigationHops: number;
@@ -68,6 +70,8 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
             '--checks <checks>',
             'checks to run: all, nullness, resource, or a comma-separated list'
         ).argParser(parseChecks).default(['nullness', 'resource'] as AnalysisCheck[], 'all'))
+        .addOption(new Option('--lifecycle-model <mode>', 'DummyMain lifecycle model')
+            .choices(['back-edge', 'bounded-unroll']).default('back-edge'))
         .option('--max-callback-iterations <n>', 'bounded lifecycle expansion rounds', positiveInteger, 1)
         .option('--max-abilities-per-flow <n>', 'maximum Abilities visited by one resource flow', nonNegativeInteger, 3)
         .option('--max-navigation-hops <n>', 'maximum navigation hops in one resource flow', nonNegativeInteger, 5)
@@ -91,6 +95,7 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
                     extractUICallbacks: options.uiCallbacks,
                     runNullness,
                     runResourceAnalysis,
+                    lifecycleModel: options.lifecycleModel,
                     maxCallbackIterations: options.maxCallbackIterations,
                     maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
                     maxNavigationHops: options.maxNavigationHops,

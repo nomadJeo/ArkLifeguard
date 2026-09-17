@@ -17,7 +17,11 @@ import { Scene } from '../../adapter/arkanalyzer';
 import { NullConstant, UndefinedConstant } from '../../adapter/arkanalyzer';
 import { ArkAssignStmt, Stmt } from '../../adapter/arkanalyzer';
 import { ArkMethod } from '../../adapter/arkanalyzer';
-import { LifecycleModelCreator } from '../../lifecycle';
+import {
+    createLifecycleModelCreator,
+    DEFAULT_LIFECYCLE_MODEL_MODE,
+    LifecycleModelMode,
+} from '../../lifecycle';
 import {
     AbilityLifecycleStage,
     AbilityLifecycleMethodStage,
@@ -35,6 +39,7 @@ import { NullnessSolver } from './NullnessSolver';
 import { NullnessLibraryRegistry } from './library/NullnessLibraryRegistry';
 
 export interface NullnessRunnerConfig {
+    lifecycleModel?: LifecycleModelMode;
     problem?: NullnessAnalysisConfig;
     lifecycle?: Omit<Partial<LifecycleModelConfig>, 'bounds'> & {
         bounds?: Partial<LifecycleModelConfig['bounds']>;
@@ -91,10 +96,14 @@ export class NullnessAnalysisRunner {
 
     runFromDummyMain(): NullnessAnalysisResult {
         try {
-            const creator = new LifecycleModelCreator(this.scene, {
-                lifecycleOrder: NULLNESS_LIFECYCLE_ORDER,
-                ...this.config.lifecycle,
-            } as Partial<LifecycleModelConfig>);
+            const creator = createLifecycleModelCreator(
+                this.scene,
+                this.config.lifecycleModel ?? DEFAULT_LIFECYCLE_MODEL_MODE,
+                {
+                    lifecycleOrder: NULLNESS_LIFECYCLE_ORDER,
+                    ...this.config.lifecycle,
+                } as Partial<LifecycleModelConfig>
+            );
             creator.create();
             return this.runWithDummyMain(creator.getDummyMain());
         } catch (error) {

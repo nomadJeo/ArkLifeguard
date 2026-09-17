@@ -34,7 +34,10 @@ import type {
 import { TaintFact } from './TaintFact';
 import { TaintAnalysisProblem, TaintAnalysisConfig, ResourceLeak, TaintLeak } from './TaintAnalysisProblem';
 import { SourceSinkManager } from './SourceSinkManager';
-import { LifecycleModelCreator } from '../../lifecycle/LifecycleModelCreator';
+import {
+    createLifecycleModelCreator,
+    LifecycleModelCreator,
+} from '../../lifecycle';
 
 // ============================================================================
 // TaintAnalysisSolver
@@ -149,7 +152,11 @@ export class TaintAnalysisRunner {
             const lifecycleConfig = this.config.maxCallbackIterations !== undefined
                 ? { bounds: { maxCallbackIterations: this.config.maxCallbackIterations } as any }
                 : undefined;
-            creator = new LifecycleModelCreator(this.scene, lifecycleConfig);
+            creator = createLifecycleModelCreator(
+                this.scene,
+                this.config.lifecycleModel ?? 'back-edge',
+                lifecycleConfig
+            );
             creator.create();
             dummyMain = creator.getDummyMain();
         } catch (e) {

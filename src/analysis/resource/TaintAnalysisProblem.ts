@@ -39,6 +39,7 @@ import {
 
 import { TaintFact, AccessPath, SourceDefinition, ILocal, IFieldSignature, IStmt } from './TaintFact';
 import { SourceSinkManager, MethodCallInfo } from './SourceSinkManager';
+import type { LifecycleModelMode } from '../../lifecycle';
 
 // ============================================================================
 // 污点分析结果
@@ -125,6 +126,8 @@ class GenFlowFunction implements FlowFunction<TaintFact> {
  * 污点分析问题配置
  */
 export interface TaintAnalysisConfig {
+    /** Lifecycle DummyMain implementation used by runFromDummyMain. */
+    lifecycleModel?: LifecycleModelMode;
     /** 最大传播深度（有界分析） */
     maxPropagationDepth?: number;
     /** 是否追踪隐式流 */
@@ -212,6 +215,7 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
             maxAbilitiesPerFlow: this.maxAbilitiesPerFlow,
             maxNavigationHops: this.maxNavigationHops,
             maxCallbackIterations: config?.maxCallbackIterations ?? 1,
+            lifecycleModel: config?.lifecycleModel ?? 'back-edge',
             collectSolverStatistics: config?.collectSolverStatistics ?? false,
         };
 

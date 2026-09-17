@@ -120,10 +120,10 @@ export class LifecycleModelCreator {
   // ========================================================================
 
   /** 分析场景 */
-  private scene: Scene;
+  protected scene: Scene;
 
   /** 配置选项 */
-  private config: LifecycleModelConfig;
+  protected config: LifecycleModelConfig;
 
   /** Ability 收集器 */
   private abilityCollector: AbilityCollector;
@@ -132,19 +132,19 @@ export class LifecycleModelCreator {
   private callbackExtractor: ViewTreeCallbackExtractor;
 
   /** 收集到的所有 Ability */
-  private abilities: AbilityInfo[] = [];
+  protected abilities: AbilityInfo[] = [];
 
   /** 收集到的所有 Component */
-  private components: ComponentInfo[] = [];
+  protected components: ComponentInfo[] = [];
 
   /** 生成的 DummyMain 方法 */
-  private dummyMain: ArkMethod = new ArkMethod();
+  protected dummyMain: ArkMethod = new ArkMethod();
 
   /** 临时变量索引（用于生成唯一名称） */
   private tempLocalIndex: number = 0;
 
   /** 类实例 Local 映射：类签名 -> Local 变量 */
-  private classInstanceMap: Map<string, Local> = new Map();
+  protected classInstanceMap: Map<string, Local> = new Map();
 
   // ========================================================================
   // 构造函数
@@ -375,7 +375,7 @@ export class LifecycleModelCreator {
    * k=1 时 CFG 为 DAG（无环），IFDS 单趟扫描即可结束，
    * 避免了原 while(true) 循环导致的无界不动点迭代。
    */
-  private buildDummyMainCfg(): void {
+  protected buildDummyMainCfg(): void {
     const cfg = new Cfg();
     cfg.setDeclaringMethod(this.dummyMain);
 
@@ -443,7 +443,7 @@ export class LifecycleModelCreator {
   /**
    * 添加静态初始化调用
    */
-  private addStaticInitialization(cfg: Cfg, entryBlock: BasicBlock): void {
+  protected addStaticInitialization(cfg: Cfg, entryBlock: BasicBlock): void {
     let isFirst = true;
 
     for (const method of this.scene.getStaticInitMethods()) {
@@ -651,7 +651,7 @@ export class LifecycleModelCreator {
   /**
    * 获取或创建类实例的 Local 变量
    */
-  private getOrCreateClassInstance(arkClass: ArkClass): Local {
+  protected getOrCreateClassInstance(arkClass: ArkClass): Local {
     const key = arkClass.getSignature().toString();
 
     if (this.classInstanceMap.has(key)) {
@@ -670,7 +670,7 @@ export class LifecycleModelCreator {
   /**
    * 添加类实例化语句
    */
-  private addInstanceCreation(
+  protected addInstanceCreation(
     block: BasicBlock,
     local: Local,
     arkClass: ArkClass,
@@ -725,7 +725,7 @@ export class LifecycleModelCreator {
    * └─────────────────────────────────────────────────────────────────┘
    * ```
    */
-  private addMethodInvocation(
+  protected addMethodInvocation(
     block: BasicBlock,
     instanceLocal: Local,
     method: ArkMethod,
@@ -907,7 +907,7 @@ export class LifecycleModelCreator {
    * - onChange(value: string)
    * - onAppear() / onDisAppear() - 无参数
    */
-  private addUICallbackInvocation(
+  protected addUICallbackInvocation(
     block: BasicBlock,
     componentLocal: Local,
     callback: UICallbackInfo,
@@ -1050,7 +1050,7 @@ export class LifecycleModelCreator {
   /**
    * 为所有语句设置 CFG 引用
    */
-  private linkStmtsToCfg(cfg: Cfg): void {
+  protected linkStmtsToCfg(cfg: Cfg): void {
     for (const block of cfg.getBlocks()) {
       cfg.updateStmt2BlockMap(block);
       for (const stmt of block.getStmts()) {

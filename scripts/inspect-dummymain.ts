@@ -14,7 +14,11 @@ import type { Sdk } from 'arkanalyzer/lib/Config';
 import { Scene, SceneConfig, SourceMethodPrinter } from 'arkanalyzer/lib/';
 import { Stmt } from 'arkanalyzer/lib/core/base/Stmt';
 import type { ArkMethod } from 'arkanalyzer/lib/core/model/ArkMethod';
-import { LifecycleModelCreator } from '../src/lifecycle/LifecycleModelCreator';
+import {
+    createLifecycleModelCreator,
+    DEFAULT_LIFECYCLE_MODEL_MODE,
+    type LifecycleModelMode,
+} from '../src/lifecycle/LifecycleModelEntry';
 import { DEFAULT_LIFECYCLE_CONFIG } from '../src/lifecycle/LifecycleTypes';
 
 type OutputFormat = 'ir' | 'source' | 'both';
@@ -26,6 +30,7 @@ interface Options {
     sdkPaths: string[];
     inferTypes: boolean;
     callbackIterations: number;
+    model: LifecycleModelMode;
 }
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +47,7 @@ function help(): void {
         '  --sdk-root <path>          Use openharmony/ets and hms/ets below an SDK root',
         '  --sdk <ets-path>           Use an ETS SDK path; repeatable',
         '  --callback-iterations <n>  DummyMain lifecycle expansion rounds; default: 1',
+        '  --model <back-edge|bounded-unroll>  Lifecycle model; default: back-edge',
         '  --no-infer-types           Skip Scene type inference',
         '  -h, --help                 Show this help',
         '',
@@ -68,6 +74,7 @@ function parseArgs(args: string[]): Options {
     const sdkPaths: string[] = [];
     let inferTypes = true;
     let callbackIterations = 1;
+    let model: LifecycleModelMode = DEFAULT_LIFECYCLE_MODEL_MODE;
 
     for (let index = 0; index < args.length; index++) {
         const arg = args[index];
@@ -107,6 +114,15 @@ function parseArgs(args: string[]): Options {
             index++;
             continue;
         }
+        if (arg === '--model') {
+            model = value(args, index, arg) as LifecycleModelMode;
+            index++;
+            continue;
+        }
+        if (arg.startsWith('--model=')) {
+            model = arg.slice('--model='.length) as LifecycleModelMode;
+            continue;
+        }
         if (arg.startsWith('--callback-iterations=')) {
             callbackIterations = Number(arg.slice('--callback-iterations='.length));
             continue;
@@ -130,7 +146,10 @@ function parseArgs(args: string[]): Options {
     if (!Number.isInteger(callbackIterations) || callbackIterations < 1) {
         throw new Error(`--callback-iterations must be a positive integer: ${callbackIterations}`);
     }
-    return { projectPath, format, sdkRoot, sdkPaths, inferTypes, callbackIterations };
+    if (!['back-edge', 'bounded-unroll'].includes(model)) {
+        throw new Error(`Invalid --model: ${model}; expected back-edge or bounded-unroll`);
+    }
+    return { projectPath, format, sdkRoot, sdkPaths, inferTypes, callbackIterations, model };
 }
 
 function discoverSdks(options: Options): Sdk[] {
@@ -193,6 +212,23 @@ function appendIr(lines: string[], method: { getCfg: () => any }): void {
         lines.push(`  B${index} -> [${successors}]`);
         block.getStmts().forEach((stmt: Stmt, stmtIndex: number) => lines.push(...formatIr(stmt, stmtIndex)));
     }
+}
+
+function describeBackEdges(method: ArkMethod): string {
+    const cfg = method.getCfg();
+    if (!cfg) return '<no CFG>';
+    const blocks = [...cfg.getBlocks()];
+    const indices = new Map(blocks.map((block, index) => [block, index]));
+    const backEdges: string[] = [];
+    for (const [fromIndex, block] of blocks.entries()) {
+        for (const successor of block.getSuccessors()) {
+            const toIndex = indices.get(successor);
+            if (toIndex !== undefined && toIndex <= fromIndex) {
+                backEdges.push(`B${fromIndex}->B${toIndex}`);
+            }
+        }
+    }
+    return backEdges.length > 0 ? backEdges.join(', ') : 'none';
 }
 
 function instanceName(typeName: string): string {
@@ -268,7 +304,7 @@ function main(): void {
     const scene = new Scene();
     scene.buildSceneFromProjectDir(config);
     if (options.inferTypes) scene.inferTypes();
-    const creator = new LifecycleModelCreator(scene, {
+    const creator = createLifecycleModelCreator(scene, options.model, {
         bounds: {
             ...DEFAULT_LIFECYCLE_CONFIG.bounds,
             maxCallbackIterations: options.callbackIterations,
@@ -280,10 +316,12 @@ function main(): void {
         'LIFECYCLE DUMMYMAIN INSPECTION',
         `PROJECT: ${projectPath}`,
         `FORMAT: ${options.format}`,
-        `CALLBACK_ITERATIONS: ${options.callbackIterations}`,
+        `MODEL: ${options.model}`,
+        `CALLBACK_ITERATIONS: ${options.model === 'bounded-unroll' ? options.callbackIterations : 'n/a'}`,
         `SDK: ${sdks.map(sdk => `${sdk.name}=${sdk.path}`).join(', ')}`,
         '',
         `METHOD ${dummyMain.getSignature().toString()}`,
+        `CFG_BACK_EDGES: ${describeBackEdges(dummyMain)}`,
     ];
     const output: string[] = [...header];
     if (options.format === 'ir' || options.format === 'both') {
