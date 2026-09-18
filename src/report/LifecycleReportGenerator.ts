@@ -16,7 +16,8 @@ export interface LifecycleModelingReport {
         lifecycleModel: ProjectAnalysisResult['settings']['lifecycleModel'];
         extractUICallbacks: boolean;
         analyzeNavigation: boolean;
-        maxCallbackIterations: number;
+        /** Only present for bounded-unroll; cyclic models do not consume a K bound. */
+        maxCallbackIterations: number | null;
     };
     summary: {
         abilities: number;
@@ -47,7 +48,9 @@ export class LifecycleReportGenerator {
                 lifecycleModel: result.settings.lifecycleModel,
                 extractUICallbacks: result.settings.extractUICallbacks,
                 analyzeNavigation: result.settings.analyzeNavigation,
-                maxCallbackIterations: result.settings.bounds.maxCallbackIterations,
+                maxCallbackIterations: result.settings.lifecycleModel === 'bounded-unroll'
+                    ? result.settings.bounds.maxCallbackIterations
+                    : null,
             },
             summary: {
                 abilities: result.summary.abilities,

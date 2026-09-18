@@ -64,4 +64,4 @@ Controlled suite 支持以下结论：M1 在刻意控制的跨层生命周期场
 
 当前结果不能说明 M1 已经提高真实应用上的总体精度。通用空指针套件对 M1 不敏感，而真实应用尚未运行带人工 ground truth 的对照实验。
 
-M0/M1 在 48 个真实应用上的单轮资源分析性能对照已经完成，结果见 [M1 RealApps 性能结果](m1_realapps_performance_results.md)。该轮 IFDS 时间变化为 -0.73%，同时传播工作量略增，不能据此认定 M1 带来性能提升。
+M0/M1 在 48 个真实应用上的单轮资源分析性能对照已经完成，结果见 [M1 RealApps 性能结果](m1_realapps_performance_results.md)。关闭 callback/Ability/navigation K-bound 后，IFDS 时间变化为 -0.27%，同时传播工作量略增，不能据此认定 M1 带来性能提升。

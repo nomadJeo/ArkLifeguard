@@ -143,9 +143,8 @@ export interface TaintAnalysisConfig {
     /** 单条数据流最多经过的导航跳数（约束3） */
     maxNavigationHops?: number;
     /**
-     * DummyMain CFG 生命周期回调序列的最大循环展开次数（约束2）
-     * 传递给 LifecycleModelCreator 的 bounds.maxCallbackIterations。
-     * 默认值 1：CFG 为 DAG，IFDS 单趟即可完成；值越大分析越全面但代价越高。
+     * bounded-unroll 模型的最大回调展开次数。
+     * flat/hierarchical 是循环 CFG，不消费此参数。
      */
     maxCallbackIterations?: number;
     /** Collect aggregate IFDS solver statistics for developer benchmarking. */
@@ -203,8 +202,8 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
         this.sourceSinkManager = config?.sourceSinkManager ?? new SourceSinkManager();
 
         this.abilityMethodMap = config?.abilityMethodMap ?? new Map();
-        this.maxAbilitiesPerFlow = config?.maxAbilitiesPerFlow ?? 3;
-        this.maxNavigationHops = config?.maxNavigationHops ?? 5;
+        this.maxAbilitiesPerFlow = config?.maxAbilitiesPerFlow ?? 0;
+        this.maxNavigationHops = config?.maxNavigationHops ?? 0;
 
         this.config = {
             maxPropagationDepth: config?.maxPropagationDepth ?? 100,
@@ -305,10 +304,11 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
                     const rightOp = srcStmt.getRightOp();
                     if (problem.isInvokeExpr(rightOp) &&
                         problem.isNavigationCall(rightOp as AbstractInvokeExpr)) {
-                        const navigated = dataFact.deriveAfterNavigation(srcStmt as IStmt);
-                        if (navigated.navigationCount > problem.maxNavigationHops) {
-                            return result; // 超出导航跳数限制，kill
-                        }
+                        const navigated = problem.applyNavigationBound(
+                            dataFact,
+                            srcStmt as IStmt
+                        );
+                        if (navigated === null) return result;
                         return problem.handleAssignmentPropagation(srcStmt, navigated);
                     }
                     return problem.handleAssignmentPropagation(srcStmt, dataFact);
@@ -319,10 +319,11 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
                 if (srcStmt instanceof ArkInvokeStmt) {
                     const invokeExpr = srcStmt.getInvokeExpr();
                     if (problem.isNavigationCall(invokeExpr)) {
-                        const navigated = dataFact.deriveAfterNavigation(srcStmt as IStmt);
-                        if (navigated.navigationCount > problem.maxNavigationHops) {
-                            return result; // 超出导航跳数限制，kill
-                        }
+                        const navigated = problem.applyNavigationBound(
+                            dataFact,
+                            srcStmt as IStmt
+                        );
+                        if (navigated === null) return result;
                         result.add(navigated);
                         return result;
                     }
@@ -498,11 +499,11 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
                 if (srcStmt instanceof ArkInvokeStmt) {
                     const invokeExpr = srcStmt.getInvokeExpr();
                     if (problem.isNavigationCall(invokeExpr)) {
-                        const navigated = dataFact.deriveAfterNavigation(srcStmt as IStmt);
-                        if (navigated.navigationCount > problem.maxNavigationHops) {
-                            // 超出导航跳数限制，杀死该数据流
-                            return result;
-                        }
+                        const navigated = problem.applyNavigationBound(
+                            dataFact,
+                            srcStmt as IStmt
+                        );
+                        if (navigated === null) return result;
                         propagatedFact = navigated;
                     }
                 }
@@ -549,6 +550,10 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
      * 若集合大小超过 maxAbilitiesPerFlow，则杀死该流（返回 null）。
      */
     private checkAbilityBoundary(fact: TaintFact, method: ArkMethod, stmt: IStmt): TaintFact | null {
+        // 0 表示关闭此实验性流预算。关闭时也不把访问历史写入
+        // fact，避免生命周期模型比较被额外的路径状态干扰。
+        if (this.maxAbilitiesPerFlow === 0) return fact;
+
         const abilityName = this.abilityMethodMap.get(method);
         if (!abilityName) {
             // 非 Ability 生命周期方法，无需边界检查
@@ -566,6 +571,16 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
             return null;
         }
         return derived;
+    }
+
+    /**
+     * 应用导航跳数预算。0 表示不限制；此时不递增 navigationCount，
+     * 否则循环 CFG 会把计数写入 fact 等价域并产生无限多个 fact。
+     */
+    private applyNavigationBound(fact: TaintFact, stmt: IStmt): TaintFact | null {
+        if (this.maxNavigationHops === 0) return fact;
+        const navigated = fact.deriveAfterNavigation(stmt);
+        return navigated.navigationCount > this.maxNavigationHops ? null : navigated;
     }
 
     /**

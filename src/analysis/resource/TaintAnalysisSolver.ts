@@ -147,14 +147,15 @@ export class TaintAnalysisRunner {
         let dummyMain: ArkMethod;
         let creator: LifecycleModelCreator;
         try {
-            // 将约束2（maxCallbackIterations）传入 LifecycleModelCreator 的 bounds 配置
-            // LifecycleModelCreator 构造函数会深合并 bounds，缺省字段使用 DEFAULT_LIFECYCLE_CONFIG.bounds 填充
-            const lifecycleConfig = this.config.maxCallbackIterations !== undefined
+            const lifecycleModel = this.config.lifecycleModel ?? 'flat';
+            // callback iteration 只属于兼容的有限展开模型。循环模型不接收 K。
+            const lifecycleConfig = lifecycleModel === 'bounded-unroll' &&
+                this.config.maxCallbackIterations !== undefined
                 ? { bounds: { maxCallbackIterations: this.config.maxCallbackIterations } as any }
                 : undefined;
             creator = createLifecycleModelCreator(
                 this.scene,
-                this.config.lifecycleModel ?? 'flat',
+                lifecycleModel,
                 lifecycleConfig
             );
             creator.create();

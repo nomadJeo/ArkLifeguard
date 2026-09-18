@@ -126,8 +126,8 @@ export interface ProjectAnalysisResult {
         };
         boundEnforcement: {
             maxCallbackIterations: 'enforced' | 'inactive-with-cyclic-model';
-            maxAbilitiesPerFlow: 'enforced' | 'inactive-without-resource-analysis';
-            maxNavigationHops: 'enforced' | 'inactive-without-resource-analysis';
+            maxAbilitiesPerFlow: 'enforced' | 'disabled' | 'inactive-without-resource-analysis';
+            maxNavigationHops: 'enforced' | 'disabled' | 'inactive-without-resource-analysis';
             maxAccessPathLength: 'enforced';
             maxPropagationDepth: 'enforced';
         };
@@ -241,8 +241,8 @@ const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPat
     runResourceAnalysis: true,
     lifecycleModel: DEFAULT_LIFECYCLE_MODEL_MODE,
     maxCallbackIterations: DEFAULT_LIFECYCLE_CONFIG.bounds.maxCallbackIterations,
-    maxAbilitiesPerFlow: DEFAULT_LIFECYCLE_CONFIG.bounds.maxAbilitiesPerFlow,
-    maxNavigationHops: DEFAULT_LIFECYCLE_CONFIG.bounds.maxNavigationHops,
+    maxAbilitiesPerFlow: 0,
+    maxNavigationHops: 0,
     maxAccessPathLength: 5,
     maxPropagationDepth: 40,
     reportUnresolvedReturns: false,
@@ -278,14 +278,19 @@ export class ProjectAnalyzer {
 
         const lifecycleStart = Date.now();
         const creator = this.withLifecycleConsole(() => {
+            const boundedUnrollConfig = this.options.lifecycleModel === 'bounded-unroll'
+                ? {
+                    bounds: {
+                        maxCallbackIterations: this.options.maxCallbackIterations,
+                        maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
+                        maxNavigationHops: this.options.maxNavigationHops,
+                    },
+                }
+                : {};
             const lifecycleCreator = createLifecycleModelCreator(scene, this.options.lifecycleModel, {
                 lifecycleOrder: NULLNESS_LIFECYCLE_ORDER,
                 enableViewTreeParsing: this.options.extractUICallbacks,
-                bounds: {
-                    maxCallbackIterations: this.options.maxCallbackIterations,
-                    maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
-                    maxNavigationHops: this.options.maxNavigationHops,
-                },
+                ...boundedUnrollConfig,
             });
             lifecycleCreator.create();
             return lifecycleCreator;
@@ -436,10 +441,10 @@ export class ProjectAnalyzer {
                         ? 'enforced'
                         : 'inactive-with-cyclic-model',
                     maxAbilitiesPerFlow: this.options.runResourceAnalysis
-                        ? 'enforced'
+                        ? (this.options.maxAbilitiesPerFlow === 0 ? 'disabled' : 'enforced')
                         : 'inactive-without-resource-analysis',
                     maxNavigationHops: this.options.runResourceAnalysis
-                        ? 'enforced'
+                        ? (this.options.maxNavigationHops === 0 ? 'disabled' : 'enforced')
                         : 'inactive-without-resource-analysis',
                     maxAccessPathLength: 'enforced',
                     maxPropagationDepth: 'enforced',

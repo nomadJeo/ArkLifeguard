@@ -42,6 +42,10 @@ describe('ProjectAnalyzer end-to-end application service', () => {
 
         expect(result.status).toBe('success');
         expect(result.resourceAnalysis.enabled).toBe(true);
+        expect(result.settings.bounds.maxAbilitiesPerFlow).toBe(0);
+        expect(result.settings.bounds.maxNavigationHops).toBe(0);
+        expect(result.settings.boundEnforcement.maxAbilitiesPerFlow).toBe('disabled');
+        expect(result.settings.boundEnforcement.maxNavigationHops).toBe('disabled');
         expect(result.summary.resourceLeaks).toBe(1);
         expect(result.summary.sources).toBeGreaterThanOrEqual(4);
         expect(result.summary.sinks).toBeGreaterThanOrEqual(2);

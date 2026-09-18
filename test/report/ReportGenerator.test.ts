@@ -211,7 +211,7 @@ describe('ReportGenerator', () => {
         const report = JSON.parse(new LifecycleReportGenerator().generate(result));
         expect(report.reportKind).toBe('lifecycle-modeling-details');
         expect(report.settings.lifecycleModel).toBe('flat');
-        expect(report.settings.maxCallbackIterations).toBe(1);
+        expect(report.settings.maxCallbackIterations).toBeNull();
         expect(report.abilities).toHaveLength(1);
         expect(report.components).toHaveLength(1);
         expect(report.navigations).toHaveLength(1);

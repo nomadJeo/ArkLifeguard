@@ -303,10 +303,11 @@ export interface BoundsConfig {
   /**
    * 约束2：整个 Ability+Component 生命周期回调序列的最大重复次数（循环展开次数）
    *
-   * - 1 = 每个回调只执行一次，DummyMain CFG 变为 DAG（推荐，默认值）
+   * - 1 = bounded-unroll 中每个回调只执行一次，DummyMain CFG 为 DAG
    * - 2+ = 允许重复，覆盖更多路径但分析代价更高
    *
-   * 此参数直接控制 CFG 结构，由 LifecycleModelCreator 在构建时消费。
+   * 仅兼容的 LifecycleModelCreator（bounded-unroll）消费此参数；
+   * Flat/Hierarchical 循环模型忽略它。
    */
   maxCallbackIterations: number;
 
@@ -383,7 +384,7 @@ export const DEFAULT_LIFECYCLE_CONFIG: LifecycleModelConfig = {
   maxNavigationDepth: 10,
   bounds: {
     maxCallbackIterations: 1, // 默认：单次展开，DummyMain 为 DAG
-    maxAbilitiesPerFlow: 3, // 默认：最多跨 3 个 Ability
-    maxNavigationHops: 5, // 默认：最多 5 次路由跳转
+    maxAbilitiesPerFlow: 0, // 默认关闭；资源 IFDS 可显式启用
+    maxNavigationHops: 0, // 默认关闭；资源 IFDS 可显式启用
   },
 };

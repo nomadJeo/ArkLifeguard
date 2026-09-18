@@ -89,9 +89,9 @@ ArkLifeguard/
 
 | 参数 | 默认值 | 作用 |
 |---|---:|---|
-| `--max-callback-iterations` | 1 | 生命周期及 UI 回调序列的最大展开轮数。 |
-| `--max-abilities-per-flow` | 3 | 单条资源流最多访问的 Ability 数量。 |
-| `--max-navigation-hops` | 5 | 单条资源流最多经过的导航跳数。 |
+| `--max-callback-iterations` | 1 | 仅 `bounded-unroll` 使用的回调展开轮数；M0/M1 忽略。 |
+| `--max-abilities-per-flow` | 0（关闭） | 可选的资源流 Ability 上限。 |
+| `--max-navigation-hops` | 0（关闭） | 可选的资源流导航跳数上限。 |
 | `--max-access-path-length` | 5 | 空指针访问路径的最大长度。 |
 | `--max-propagation-depth` | 40 | 资源与空指针 Fact 的最大传播深度。 |
 
@@ -182,10 +182,10 @@ npm run test:resource:real-apps -- \
 | `--output <file>` | 支持 | 支持 | 保存增量 JSON 报告。 |
 | `--timeout-ms <n>` | 默认 600000 | 默认 180000 | 单项目硬超时。 |
 | `--sdk-root <path>` | 支持 | 支持 | 指定 ETS SDK 根目录。 |
-| `--callback-iterations <n>` | 默认 1 | 默认 1 | 生命周期回调展开轮数。 |
+| `--callback-iterations <n>` | 默认 1 | 不适用 | 仅旧的有限展开入口使用；M0/M1 循环模型不消费。 |
 | `--max-access-path-length <n>` | 默认 5 | 不适用 | 空指针访问路径长度上限。 |
-| `--max-abilities-per-flow <n>` | 不适用 | 默认 3 | 单条资源流的 Ability 上限。 |
-| `--max-navigation-hops <n>` | 不适用 | 默认 5 | 单条资源流的导航跳数上限。 |
+| `--max-abilities-per-flow <n>` | 不适用 | 默认 0（关闭） | 可选的资源流 Ability 上限，不属于 M0/M1。 |
+| `--max-navigation-hops <n>` | 不适用 | 默认 0（关闭） | 可选的资源流导航跳数上限，不属于 M0/M1。 |
 | `--max-propagation-depth <n>` | 默认 40 | 默认 40 | Fact 传播深度上限。 |
 | `--lifecycle-model <mode>` | 不适用 | 默认 `flat` | 选择 `flat` 或 `hierarchical` 生命周期模型。 |
 | `--ifds-stats` | 不适用 | 支持 | 在报告中保存 IFDS 求解时间和传播统计。 |

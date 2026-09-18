@@ -79,3 +79,11 @@ Ability dispatcher
 `onBackground` 或 `onPageHide` 返回外层作用域；再次执行 UI callback 前必须重新经过 `onForeground` 和 `onPageShow`。每层内部仍允许非确定重复，因此连续 `onForeground` 和连续 `onPageShow` 仍然存在，留给 M2 的局部状态机处理。
 
 M1 没有把生命周期状态加入 IFDS fact，也没有修改 IFDS solver。M2 Hierarchical + Local State Machines 尚未实现。
+
+## M0/M1 与 K-bound 参数
+
+M0 Flat 和 M1 Hierarchical 都不消费 `maxCallbackIterations`。两者直接构造有限大小的循环 CFG，由 IFDS 在有限 fact 域上求不动点；改变 callback iteration 不会改变其 block、edge 或 callback call。该参数只对兼容模式 `bounded-unroll` 生效。
+
+`maxAbilitiesPerFlow` 和 `maxNavigationHops` 也不参与 M0/M1 DummyMain 构造，但资源 IFDS 曾经无条件消费这两个预算。因此，生命周期模型本身无 K，不等于整条资源分析链路无 K。现在取值 `0` 会真正关闭相应预算：不截断传播，也不把 Ability/Navigation 计数加入 fact 状态。RealApps 的 M0/M1 比较默认使用这一关闭状态。
+
+`maxPropagationDepth` 仍是资源和空指针分析内部的传播安全阈值，不是生命周期 callback/Ability/navigation 的 K。当前 RealApps 实验保留相同的 40，以免同时改变分析器的 fact 域和生命周期模型；若要研究完全无传播深度阈值的求解，需要先单独证明资源 fact 域有限。

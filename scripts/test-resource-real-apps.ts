@@ -36,7 +36,6 @@ interface Options {
     projects: string[];
     outputPath?: string;
     timeoutMs: number;
-    callbackIterations: number;
     maxAbilitiesPerFlow: number;
     maxNavigationHops: number;
     maxPropagationDepth: number;
@@ -82,7 +81,6 @@ interface RealAppsReport {
     settings: {
         sdkRoot: string;
         timeoutMs: number;
-        callbackIterations: number;
         maxAbilitiesPerFlow: number;
         maxNavigationHops: number;
         maxPropagationDepth: number;
@@ -143,9 +141,8 @@ function help(): void {
         '  --real-apps-root <path>     HarmonyRealApps directory containing meta.json',
         '  --sdk-root <path>           SDK root containing openharmony/ets and hms/ets',
         '  --timeout-ms <n>            Hard per-project timeout; default: 180000',
-        '  --callback-iterations <n>   Lifecycle callback expansion rounds; default: 1',
-        '  --max-abilities-per-flow <n>  Ability bound for one resource flow; default: 3',
-        '  --max-navigation-hops <n>   Navigation bound for one resource flow; default: 5',
+        '  --max-abilities-per-flow <n>  Ability bound; 0 disables it; default: 0',
+        '  --max-navigation-hops <n>   Navigation bound; 0 disables it; default: 0',
         '  --max-propagation-depth <n> Resource fact propagation bound; default: 40',
         '  --ifds-stats                Collect aggregate IFDS solver statistics',
         '  --lifecycle-model <mode>    flat or hierarchical; default: flat',
@@ -186,9 +183,8 @@ function parseArgs(args: string[]): Options {
     const projects: string[] = [];
     let outputPath: string | undefined;
     let timeoutMs = 180_000;
-    let callbackIterations = 1;
-    let maxAbilitiesPerFlow = 3;
-    let maxNavigationHops = 5;
+    let maxAbilitiesPerFlow = 0;
+    let maxNavigationHops = 0;
     let maxPropagationDepth = 40;
     let collectSolverStatistics = false;
     let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'> = 'flat';
@@ -231,12 +227,6 @@ function parseArgs(args: string[]): Options {
             timeoutMs = positiveInteger(consume(arg), arg);
         } else if (arg.startsWith('--timeout-ms=')) {
             timeoutMs = positiveInteger(arg.slice('--timeout-ms='.length), '--timeout-ms');
-        } else if (arg === '--callback-iterations') {
-            callbackIterations = positiveInteger(consume(arg), arg);
-        } else if (arg.startsWith('--callback-iterations=')) {
-            callbackIterations = positiveInteger(
-                arg.slice('--callback-iterations='.length), '--callback-iterations'
-            );
         } else if (arg === '--max-abilities-per-flow') {
             maxAbilitiesPerFlow = nonNegativeInteger(consume(arg), arg);
         } else if (arg.startsWith('--max-abilities-per-flow=')) {
@@ -287,7 +277,6 @@ function parseArgs(args: string[]): Options {
         projects,
         outputPath,
         timeoutMs,
-        callbackIterations,
         maxAbilitiesPerFlow,
         maxNavigationHops,
         maxPropagationDepth,
@@ -362,7 +351,6 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
             runResourceAnalysis: true,
             analyzeNavigation: false,
             lifecycleModel: options.lifecycleModel,
-            maxCallbackIterations: options.callbackIterations,
             maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
             maxNavigationHops: options.maxNavigationHops,
             maxPropagationDepth: options.maxPropagationDepth,
@@ -527,7 +515,6 @@ async function main(): Promise<void> {
         settings: {
             sdkRoot: options.sdkRoot,
             timeoutMs: options.timeoutMs,
-            callbackIterations: options.callbackIterations,
             maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
             maxNavigationHops: options.maxNavigationHops,
             maxPropagationDepth: options.maxPropagationDepth,
@@ -554,7 +541,6 @@ async function main(): Promise<void> {
             '--worker-result', resultPath,
             '--real-apps-root', options.realAppsRoot,
             '--sdk-root', options.sdkRoot,
-            '--callback-iterations', String(options.callbackIterations),
             '--max-abilities-per-flow', String(options.maxAbilitiesPerFlow),
             '--max-navigation-hops', String(options.maxNavigationHops),
             '--max-propagation-depth', String(options.maxPropagationDepth),

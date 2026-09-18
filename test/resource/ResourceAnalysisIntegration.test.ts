@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { LifecycleModelCreator } from '../../src/lifecycle';
+import { createLifecycleModelCreator, LifecycleModelCreator } from '../../src/lifecycle';
 import {
     ResourceLeakDetector,
     FileLeakSuppressor,
@@ -94,5 +94,29 @@ describe('resource analysis integration', () => {
         expect(result.statistics.sinkCount).toBeGreaterThan(0);
         expect(result.statistics.totalFacts).toBeGreaterThan(0);
         expect(result.resourceLeaks.some(leak => leak.resourceType === 'AVPlayer')).toBe(true);
+    });
+
+    it('treats zero Ability and navigation budgets as disabled', () => {
+        const unboundedScene = buildResourceScene('unbounded-navigation');
+        const creator = createLifecycleModelCreator(unboundedScene, 'flat');
+        creator.create();
+
+        const result = new TaintAnalysisRunner(unboundedScene, {
+            maxAbilitiesPerFlow: 0,
+            maxNavigationHops: 0,
+            maxPropagationDepth: 40,
+        }).runWithDummyMain(creator.getDummyMain(), creator.getAbilityMethodSet());
+
+        expect(result.success).toBe(true);
+        expect(result.statistics.sourceCount).toBeGreaterThan(0);
+        expect(result.statistics.sinkCount).toBeGreaterThan(0);
+        expect(result.resourceLeaks.some(leak => leak.resourceType === 'AVPlayer')).toBe(false);
+
+        const bounded = new TaintAnalysisRunner(unboundedScene, {
+            maxAbilitiesPerFlow: 0,
+            maxNavigationHops: 1,
+            maxPropagationDepth: 40,
+        }).runWithDummyMain(creator.getDummyMain(), creator.getAbilityMethodSet());
+        expect(bounded.resourceLeaks.some(leak => leak.resourceType === 'AVPlayer')).toBe(true);
     });
 });

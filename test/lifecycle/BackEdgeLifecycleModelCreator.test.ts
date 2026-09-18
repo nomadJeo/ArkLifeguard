@@ -104,4 +104,29 @@ describe('interchangeable lifecycle model entry', () => {
             'handleClick',
         ]));
     });
+
+    it.each(['flat', 'hierarchical'] as const)(
+        '%s ignores the bounded-unroll callback iteration parameter',
+        mode => {
+            const shapes = [1, 7].map(maxCallbackIterations => {
+                const creator = createLifecycleModelCreator(
+                    buildLifecycleScene('simple'),
+                    mode,
+                    { bounds: { maxCallbackIterations } as any }
+                );
+                creator.create();
+                const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
+                return {
+                    blocks: blocks.length,
+                    edges: blocks.reduce(
+                        (sum, block) => sum + block.getSuccessors().length,
+                        0
+                    ),
+                    calls: blocks.flatMap(invokedNames).sort(),
+                };
+            });
+
+            expect(shapes[1]).toEqual(shapes[0]);
+        }
+    );
 });
