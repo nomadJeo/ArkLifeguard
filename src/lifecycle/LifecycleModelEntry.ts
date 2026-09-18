@@ -5,13 +5,13 @@
  */
 
 import { Scene } from "../adapter/arkanalyzer";
-import { BackEdgeLifecycleModelCreator } from "./BackEdgeLifecycleModelCreator";
+import { FlatLifecycleModelCreator } from "./BackEdgeLifecycleModelCreator";
 import { LifecycleModelCreator } from "./LifecycleModelCreator";
 import { LifecycleModelConfig } from "./LifecycleTypes";
 
-export type LifecycleModelMode = "back-edge" | "bounded-unroll";
+export type LifecycleModelMode = "flat" | "back-edge" | "bounded-unroll";
 
-export const DEFAULT_LIFECYCLE_MODEL_MODE: LifecycleModelMode = "back-edge";
+export const DEFAULT_LIFECYCLE_MODEL_MODE: LifecycleModelMode = "flat";
 
 /** Selects one of the interchangeable lifecycle DummyMain implementations. */
 export function createLifecycleModelCreator(
@@ -19,8 +19,8 @@ export function createLifecycleModelCreator(
   mode: LifecycleModelMode = DEFAULT_LIFECYCLE_MODEL_MODE,
   config?: Partial<LifecycleModelConfig>,
 ): LifecycleModelCreator {
-  if (mode === "back-edge") {
-    return new BackEdgeLifecycleModelCreator(scene, config);
+  if (mode === "flat" || mode === "back-edge") {
+    return new FlatLifecycleModelCreator(scene, config);
   }
   return new LifecycleModelCreator(scene, config);
 }

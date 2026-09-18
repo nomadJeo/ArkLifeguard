@@ -49,7 +49,7 @@ const COMPONENT_LOOP_STAGES: ComponentLifecycleStage[] = [
 ];
 
 /**
- * FlowDroid/HomeFlow-style lifecycle model.
+ * M0 flat lifecycle model, following the FlowDroid/HomeFlow-style DummyMain.
  *
  * The generated CFG is finite, but contains a back edge around lifecycle and
  * UI callback branches:
@@ -58,7 +58,7 @@ const COMPONENT_LOOP_STAGES: ComponentLifecycleStage[] = [
  *                           |                            |
  *                           +------> destroy/return <----+
  */
-export class BackEdgeLifecycleModelCreator extends LifecycleModelCreator {
+export class FlatLifecycleModelCreator extends LifecycleModelCreator {
   protected override buildDummyMainCfg(): void {
     const cfg = new Cfg();
     cfg.setDeclaringMethod(this.dummyMain);
@@ -323,3 +323,6 @@ export class BackEdgeLifecycleModelCreator extends LifecycleModelCreator {
     to.addPredecessorBlock(from);
   }
 }
+
+/** @deprecated Use FlatLifecycleModelCreator; retained for source compatibility. */
+export { FlatLifecycleModelCreator as BackEdgeLifecycleModelCreator };

@@ -215,7 +215,7 @@ export class TaintAnalysisProblem extends DataflowProblem<TaintFact> {
             maxAbilitiesPerFlow: this.maxAbilitiesPerFlow,
             maxNavigationHops: this.maxNavigationHops,
             maxCallbackIterations: config?.maxCallbackIterations ?? 1,
-            lifecycleModel: config?.lifecycleModel ?? 'back-edge',
+            lifecycleModel: config?.lifecycleModel ?? 'flat',
             collectSolverStatistics: config?.collectSolverStatistics ?? false,
         };
 

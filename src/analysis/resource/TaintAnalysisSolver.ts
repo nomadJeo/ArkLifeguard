@@ -154,7 +154,7 @@ export class TaintAnalysisRunner {
                 : undefined;
             creator = createLifecycleModelCreator(
                 this.scene,
-                this.config.lifecycleModel ?? 'back-edge',
+                this.config.lifecycleModel ?? 'flat',
                 lifecycleConfig
             );
             creator.create();

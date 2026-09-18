@@ -1,0 +1,15 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "mainElement": "EntryAbility",
+    "deviceTypes": ["phone"],
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/EntryAbility.ets",
+        "exported": true
+      }
+    ]
+  }
+}

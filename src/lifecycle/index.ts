@@ -86,7 +86,10 @@ export {
 export { AbilityCollector } from './AbilityCollector';
 export { ViewTreeCallbackExtractor, extractUICallbacks } from './ViewTreeCallbackExtractor';
 export { LifecycleModelCreator } from './LifecycleModelCreator';
-export { BackEdgeLifecycleModelCreator } from './BackEdgeLifecycleModelCreator';
+export {
+    FlatLifecycleModelCreator,
+    BackEdgeLifecycleModelCreator,
+} from './BackEdgeLifecycleModelCreator';
 export {
     createLifecycleModelCreator,
     DEFAULT_LIFECYCLE_MODEL_MODE,

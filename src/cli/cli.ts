@@ -71,7 +71,7 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
             'checks to run: all, nullness, resource, or a comma-separated list'
         ).argParser(parseChecks).default(['nullness', 'resource'] as AnalysisCheck[], 'all'))
         .addOption(new Option('--lifecycle-model <mode>', 'DummyMain lifecycle model')
-            .choices(['back-edge', 'bounded-unroll']).default('back-edge'))
+            .choices(['flat', 'back-edge', 'bounded-unroll']).default('flat'))
         .option('--max-callback-iterations <n>', 'bounded lifecycle expansion rounds', positiveInteger, 1)
         .option('--max-abilities-per-flow <n>', 'maximum Abilities visited by one resource flow', nonNegativeInteger, 3)
         .option('--max-navigation-hops <n>', 'maximum navigation hops in one resource flow', nonNegativeInteger, 5)

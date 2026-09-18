@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "controlled-lifecycle-modeling",
+  "cases": [
+    {
+      "id": "M0.PageVisibleEvent",
+      "project": "PageVisibility",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": true,
+      "observation": "nullness",
+      "source": "this.visibleResource = null",
+      "dereference": "this.visibleResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": true }
+    },
+    {
+      "id": "M0.MountedComponentEvent",
+      "project": "ComponentLifetime",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": true,
+      "observation": "nullness",
+      "source": "this.mountedResource = null",
+      "dereference": "this.mountedResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": true }
+    },
+    {
+      "id": "M0.ComponentDestroyedBoundary",
+      "project": "ComponentLifetime",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": false,
+      "observation": "nullness",
+      "source": "this.destroyedResource = null",
+      "dereference": "this.destroyedResource!.use()",
+      "expected": { "flat": false, "hierarchical": false, "hierarchical-state": false }
+    },
+    {
+      "id": "M0.LegalForegroundReentry",
+      "project": "AbilityReentry",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": true,
+      "observation": "nullness",
+      "source": "this.reentryResource = null",
+      "dereference": "this.reentryResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": true }
+    },
+    {
+      "id": "M0.AbilityDestroyedBoundary",
+      "project": "AbilityReentry",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": false,
+      "observation": "nullness",
+      "source": "this.destroyedResource = null",
+      "dereference": "this.destroyedResource!.use()",
+      "expected": { "flat": false, "hierarchical": false, "hierarchical-state": false }
+    },
+    {
+      "id": "M0.WindowDestroyedBoundary",
+      "project": "WindowStage",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": false,
+      "observation": "immediate-transition",
+      "from": "onWindowStageDestroy",
+      "to": "onPageShow",
+      "expected": { "flat": false, "hierarchical": false, "hierarchical-state": false }
+    },
+    {
+      "id": "M1.PageHiddenEvent",
+      "project": "PageVisibility",
+      "firstPreciseModel": "M1",
+      "semanticFeasible": false,
+      "observation": "nullness",
+      "source": "this.hiddenResource = null",
+      "dereference": "this.hiddenResource!.use()",
+      "expected": { "flat": true, "hierarchical": false, "hierarchical-state": false }
+    },
+    {
+      "id": "M1.AbilityBackgroundEvent",
+      "project": "PageVisibility",
+      "firstPreciseModel": "M1",
+      "semanticFeasible": false,
+      "observation": "immediate-transition",
+      "from": "onBackground",
+      "to": "handleClick",
+      "expected": { "flat": true, "hierarchical": false, "hierarchical-state": false }
+    },
+    {
+      "id": "M2.RepeatedPageShow",
+      "project": "PageStateOrder",
+      "firstPreciseModel": "M2",
+      "semanticFeasible": false,
+      "observation": "nullness",
+      "source": "this.repeatedShowResource = null",
+      "dereference": "this.repeatedShowResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": false }
+    },
+    {
+      "id": "M0.LegalPageReentryPreservation",
+      "project": "PageStateOrder",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": true,
+      "observation": "nullness",
+      "source": "this.legalReentryResource = null",
+      "dereference": "this.legalReentryResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": true }
+    },
+    {
+      "id": "M2.RepeatedForeground",
+      "project": "AbilityStateOrder",
+      "firstPreciseModel": "M2",
+      "semanticFeasible": false,
+      "observation": "nullness",
+      "source": "this.repeatedForegroundResource = null",
+      "dereference": "this.repeatedForegroundResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": false }
+    },
+    {
+      "id": "M0.LegalForegroundReentryPreservation",
+      "project": "AbilityStateOrder",
+      "firstPreciseModel": "M0",
+      "semanticFeasible": true,
+      "observation": "nullness",
+      "source": "this.legalReentryResource = null",
+      "dereference": "this.legalReentryResource!.use()",
+      "expected": { "flat": true, "hierarchical": true, "hierarchical-state": true }
+    }
+  ]
+}

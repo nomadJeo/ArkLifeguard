@@ -1,6 +1,13 @@
-# ArkDefectBench 空指针测试套件
+# ArkDefectBench
 
-ArkDefectBench 是独立于 ArkAnalyzer 实现的 HarmonyOS ArkTS 缺陷基准。当前 `Null Pointer Dereference/` 包含 66 个最小样例，覆盖基本空值、数据流、路径敏感、异常流、生命周期、回调和异步。安全负例与正例按特性共同放在对应分类中，不再单独设置负例目录。
+ArkDefectBench 是独立于 ArkAnalyzer 实现的 HarmonyOS ArkTS 分析基准。当前包含两个相互独立的套件：
+
+- `Null Pointer Dereference/`：66 个空指针语义用例，用于计算 TP、FP、TN、FN；
+- `Lifecycle Modeling/`：6 个受控项目、12 个观察项，用于比较 M0、M1、M2 生命周期模型。
+
+## 空指针测试套件
+
+`Null Pointer Dereference/` 覆盖基本空值、数据流、路径敏感、异常流、生命周期、回调和异步。安全负例与正例按特性共同放在对应分类中，不再单独设置负例目录。
 
 这里的“空指针”同时包括 ArkTS/JavaScript 运行时中的 `null` 和 `undefined`。源码中的 `NPD_EXPECTED`、`NPD_NOT_EXPECTED` 用于人工阅读；自动测试的权威预期是 `Null Pointer Dereference/null_pointer_expected.json`。
 正例应先满足 ArkTS 空安全语法：对可空值使用 `!` 显式绕过编译期检查，再验证运行时空值解引用；不将编译器本应直接拒绝的 nullable 属性访问冒充为可运行缺陷。
@@ -80,3 +87,15 @@ npm run test:nullness:bench -- --case Lifecycle.Component.StateReset
 ## 扩展约定
 
 新增样例时，在相应分类下创建唯一的叶子目录，只放一个独立场景，并同步添加 JSON 条目。测试会递归发现所有含 `.ets`/`.ts` 源码的叶子目录；目录存在但 oracle 缺失，或 oracle 指向不存在目录，完整性测试都会失败。
+
+## 生命周期建模套件
+
+`Lifecycle Modeling/` 是 RQ1 的 controlled benchmark。它与空指针语义套件分开维护 oracle，因为这里的 `expected` 表示某个生命周期模型是否保留路径，并不直接表示程序是否存在 bug。
+
+详细实验步骤见 [实验说明](../docs/controlled_lifecycle_benchmark.md)，当前观测见 [实验结果](../docs/controlled_lifecycle_benchmark_results.md)。运行命令：
+
+```bash
+npm run test:lifecycle:benchmark
+```
+
+目前只实现并执行 M0。M1、M2 的字段是后续实现的验收契约。

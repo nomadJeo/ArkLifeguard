@@ -105,6 +105,7 @@ ArkLifeguard/
 | `npm run typecheck:test` | 检查测试源码类型。 |
 | `npm test` | 运行默认测试套件。 |
 | `npm run test:lifecycle` | 运行生命周期建模测试。 |
+| `npm run test:lifecycle:benchmark` | 运行 ArkDefectBench 生命周期模型受控实验。 |
 | `npm run test:ifds` | 运行 IFDS 基础设施测试。 |
 | `npm run test:resource` | 运行资源分析测试。 |
 | `npm run test:nullness` | 运行空指针分析测试。 |
@@ -129,6 +130,16 @@ npm run test:nullness:bench -- --case DirectNull
 ```
 
 Bench 用于衡量已有标注上的诊断精度，不生成持久化报告。存在 FP、FN、超时或执行错误时命令返回非零状态。`--` 用于把后面的参数传递给测试脚本。
+
+### 生命周期建模 Bench
+
+`test:lifecycle:benchmark` 使用 `ArkDefectBench/Lifecycle Modeling/lifecycle_model_expected.json` 比较生命周期模型保留或删除的路径。当前只执行 M0 Flat；M1、M2 的预期作为后续实现的验收契约。
+
+```bash
+npm run test:lifecycle:benchmark
+```
+
+实验步骤与实际结果分别记录在 [实验说明](docs/controlled_lifecycle_benchmark.md) 和 [实验结果](docs/controlled_lifecycle_benchmark_results.md)。
 
 ### 真实应用测试
 

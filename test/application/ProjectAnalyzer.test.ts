@@ -21,9 +21,9 @@ describe('ProjectAnalyzer end-to-end application service', () => {
         expect(result.nullness.success).toBe(true);
         expect(result.resourceAnalysis.success).toBe(true);
         expect(result.resourceAnalysis.analyzedMethods).toBeGreaterThan(0);
-        expect(result.settings.lifecycleModel).toBe('back-edge');
+        expect(result.settings.lifecycleModel).toBe('flat');
         expect(result.settings.boundEnforcement.maxCallbackIterations)
-            .toBe('inactive-with-back-edge-model');
+            .toBe('inactive-with-flat-model');
         expect(result.settings.boundEnforcement.maxAbilitiesPerFlow).toBe('enforced');
         expect(result.settings.bounds).toEqual({
             maxCallbackIterations: 2,

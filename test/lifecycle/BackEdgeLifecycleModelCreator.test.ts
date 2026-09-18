@@ -36,11 +36,11 @@ function invokedNames(block: BasicBlock): string[] {
 }
 
 describe('interchangeable lifecycle model entry', () => {
-    it('uses the back-edge model by default and separates start, loop and end callbacks', () => {
+    it('uses the flat model by default and separates start, loop and end callbacks', () => {
         const creator = createLifecycleModelCreator(buildLifecycleScene('simple'));
         creator.create();
 
-        expect(DEFAULT_LIFECYCLE_MODEL_MODE).toBe('back-edge');
+        expect(DEFAULT_LIFECYCLE_MODEL_MODE).toBe('flat');
         const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
         expect(hasCycle(blocks)).toBe(true);
 
@@ -65,6 +65,16 @@ describe('interchangeable lifecycle model entry', () => {
             'build',
             'handleClick',
         ]));
+    });
+
+    it('keeps back-edge as a compatibility alias for flat', () => {
+        const creator = createLifecycleModelCreator(
+            buildLifecycleScene('simple'),
+            'back-edge'
+        );
+        creator.create();
+
+        expect(hasCycle([...creator.getDummyMain().getCfg()!.getBlocks()])).toBe(true);
     });
 
     it('keeps the bounded unroll model selectable for comparison', () => {

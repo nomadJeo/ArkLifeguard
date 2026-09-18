@@ -21,7 +21,7 @@ const result: ProjectAnalysisResult = {
         analyzeNavigation: true,
         runNullness: true,
         runResourceAnalysis: true,
-        lifecycleModel: 'back-edge',
+        lifecycleModel: 'flat',
         bounds: {
             maxCallbackIterations: 1,
             maxAbilitiesPerFlow: 3,
@@ -30,7 +30,7 @@ const result: ProjectAnalysisResult = {
             maxPropagationDepth: 40,
         },
         boundEnforcement: {
-            maxCallbackIterations: 'inactive-with-back-edge-model',
+            maxCallbackIterations: 'inactive-with-flat-model',
             maxAbilitiesPerFlow: 'enforced',
             maxNavigationHops: 'enforced',
             maxAccessPathLength: 'enforced',
@@ -210,7 +210,7 @@ describe('ReportGenerator', () => {
     it('writes lifecycle modeling details as a separate report', () => {
         const report = JSON.parse(new LifecycleReportGenerator().generate(result));
         expect(report.reportKind).toBe('lifecycle-modeling-details');
-        expect(report.settings.lifecycleModel).toBe('back-edge');
+        expect(report.settings.lifecycleModel).toBe('flat');
         expect(report.settings.maxCallbackIterations).toBe(1);
         expect(report.abilities).toHaveLength(1);
         expect(report.components).toHaveLength(1);

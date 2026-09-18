@@ -125,7 +125,7 @@ export interface ProjectAnalysisResult {
             maxPropagationDepth: number;
         };
         boundEnforcement: {
-            maxCallbackIterations: 'enforced' | 'inactive-with-back-edge-model';
+            maxCallbackIterations: 'enforced' | 'inactive-with-flat-model';
             maxAbilitiesPerFlow: 'enforced' | 'inactive-without-resource-analysis';
             maxNavigationHops: 'enforced' | 'inactive-without-resource-analysis';
             maxAccessPathLength: 'enforced';
@@ -434,7 +434,7 @@ export class ProjectAnalyzer {
                 boundEnforcement: {
                     maxCallbackIterations: this.options.lifecycleModel === 'bounded-unroll'
                         ? 'enforced'
-                        : 'inactive-with-back-edge-model',
+                        : 'inactive-with-flat-model',
                     maxAbilitiesPerFlow: this.options.runResourceAnalysis
                         ? 'enforced'
                         : 'inactive-without-resource-analysis',

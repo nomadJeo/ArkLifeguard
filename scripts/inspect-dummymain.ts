@@ -47,7 +47,7 @@ function help(): void {
         '  --sdk-root <path>          Use openharmony/ets and hms/ets below an SDK root',
         '  --sdk <ets-path>           Use an ETS SDK path; repeatable',
         '  --callback-iterations <n>  DummyMain lifecycle expansion rounds; default: 1',
-        '  --model <back-edge|bounded-unroll>  Lifecycle model; default: back-edge',
+        '  --model <flat|back-edge|bounded-unroll>  Lifecycle model; default: flat',
         '  --no-infer-types           Skip Scene type inference',
         '  -h, --help                 Show this help',
         '',
@@ -146,8 +146,8 @@ function parseArgs(args: string[]): Options {
     if (!Number.isInteger(callbackIterations) || callbackIterations < 1) {
         throw new Error(`--callback-iterations must be a positive integer: ${callbackIterations}`);
     }
-    if (!['back-edge', 'bounded-unroll'].includes(model)) {
-        throw new Error(`Invalid --model: ${model}; expected back-edge or bounded-unroll`);
+    if (!['flat', 'back-edge', 'bounded-unroll'].includes(model)) {
+        throw new Error(`Invalid --model: ${model}; expected flat, back-edge, or bounded-unroll`);
     }
     return { projectPath, format, sdkRoot, sdkPaths, inferTypes, callbackIterations, model };
 }

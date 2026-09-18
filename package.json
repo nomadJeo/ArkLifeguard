@@ -16,6 +16,7 @@
     "test": "vitest run --exclude test/nullness/NullnessArkDefectBench.test.ts",
     "test:watch": "vitest",
     "test:lifecycle": "vitest run test/lifecycle",
+    "test:lifecycle:benchmark": "vitest run test/lifecycle/ControlledLifecycleBenchmark.test.ts",
     "test:ifds": "vitest run test/ifds",
     "test:cli": "vitest run test/application test/report test/cli",
     "test:nullness": "vitest run test/nullness --exclude test/nullness/NullnessArkDefectBench.test.ts",
