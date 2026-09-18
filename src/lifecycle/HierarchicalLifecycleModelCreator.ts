@@ -5,7 +5,6 @@
  */
 
 import {
-  ArkAssignStmt,
   ArkBody,
   ArkConditionExpr,
   ArkIfStmt,
@@ -13,19 +12,19 @@ import {
   ArkReturnVoidStmt,
   BasicBlock,
   Cfg,
-  Constant,
   Local,
-  NumberType,
   RelationalBinaryOperator,
   ValueUtil,
 } from "../adapter/arkanalyzer";
 import { LifecycleModelCreator } from "./LifecycleModelCreator";
 import {
+  AbilityInfo,
   AbilityLifecycleMethodStage,
   AbilityLifecycleStage,
-  AbilityInfo,
   ComponentInfo,
   ComponentLifecycleStage,
+  NavigationType,
+  UICallbackInfo,
 } from "./LifecycleTypes";
 
 const ABILITY_START_STAGES = new Set<AbilityLifecycleMethodStage>([
@@ -48,22 +47,16 @@ const COMPONENT_PAGE_SCOPE_STAGES: ComponentLifecycleStage[] = [
 ];
 
 /**
- * M1 lifecycle model.
+ * M1 lifecycle model with compact scope dispatchers.
  *
- * It separates the global Flat dispatcher into nested lifetime scopes:
- *
- * Ability dispatcher
- *   -> foreground entry
- *   -> Page dispatcher
- *      -> page-show entry
- *      -> visible UI-event dispatcher
- *
- * Dispatch inside each scope remains nondeterministic. In particular,
- * foreground and page-show callbacks may repeat; M2 is responsible for local
- * callback ordering.
+ * A scope head links directly to concrete callback blocks, and callbacks return
+ * to that head. Ability-owned components stay inside their Ability scope;
+ * components with no resolved owner remain in a conservative standalone scope.
  */
 export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
   protected override buildDummyMainCfg(): void {
+    this.retainReachableModelElements();
+
     const cfg = new Cfg();
     cfg.setDeclaringMethod(this.dummyMain);
 
@@ -74,101 +67,55 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     this.addAbilityStages(entryBlock, ABILITY_START_STAGES);
     this.addComponentStage(entryBlock, ComponentLifecycleStage.ABOUT_TO_APPEAR);
 
-    const countLocal = new Local("count", NumberType.getInstance());
-    entryBlock.addStmt(
-      new ArkAssignStmt(countLocal, ValueUtil.getOrCreateNumberConst(0)),
-    );
-
-    const abilityHead = this.createLoopHead(cfg, entryBlock);
-    let abilityTails: BasicBlock[] = [abilityHead];
-    let branchIndex = 0;
-
+    const abilityHead = this.createDispatchHead(cfg, entryBlock);
     const ownedComponentSignatures = new Set<string>();
+
     for (const ability of this.abilities) {
       const components = this.uniqueComponents(ability.components);
       for (const component of components) {
         ownedComponentSignatures.add(component.signature.toString());
       }
 
-      // Each foreground branch owns one Ability and only that Ability's pages.
-      // This is the M1 ownership boundary used by the nested Page/UI scopes.
-      const foreground = this.createBranch(
-        cfg,
-        abilityTails,
-        countLocal,
-        branchIndex++,
-      );
-      this.addAbilityStageFor(
-        foreground.invokeBlock,
-        ability,
+      const foreground = ability.lifecycleMethods.get(
         AbilityLifecycleStage.FOREGROUND,
       );
-      abilityTails = [foreground.ifBlock];
-      if (components.length > 0) {
-        const pageHead = this.buildPageScope(
+      let scopeEntry = abilityHead;
+      if (foreground) {
+        scopeEntry = this.addMethodDispatch(
           cfg,
-          foreground.invokeBlock,
-          countLocal,
-          branchIndex,
-          components,
-        );
-        branchIndex += this.pageBranchCount(components);
-        this.linkBlocks(pageHead, abilityHead);
-      } else {
-        this.linkBlocks(foreground.invokeBlock, abilityHead);
+          abilityHead,
+          [[this.getOrCreateClassInstance(ability.arkClass), foreground]],
+        )!;
       }
 
-      const background = this.createBranch(
+      if (components.length > 0) {
+        const pageHead = this.buildPageScope(cfg, scopeEntry, components);
+        this.linkBlocks(pageHead, abilityHead);
+      } else if (scopeEntry !== abilityHead) {
+        this.linkBlocks(scopeEntry, abilityHead);
+      }
+
+      this.addAbilityStageDispatch(
         cfg,
-        abilityTails,
-        countLocal,
-        branchIndex++,
-      );
-      this.addAbilityStageFor(
-        background.invokeBlock,
+        abilityHead,
         ability,
         AbilityLifecycleStage.BACKGROUND,
       );
-      this.linkBlocks(background.invokeBlock, abilityHead);
-      abilityTails = [background.ifBlock];
-
-      for (const [instance, method] of this.otherAbilityMethods(ability)) {
-        abilityTails = this.addMethodBranch(
-          cfg,
-          abilityTails,
-          countLocal,
-          branchIndex++,
-          [[instance, method]],
-        );
+      for (const invocation of this.otherAbilityMethods(ability)) {
+        this.addReturningMethodDispatch(cfg, abilityHead, [invocation]);
       }
     }
 
-    // Components whose loadContent owner cannot be resolved stay reachable in
-    // a conservative standalone page scope instead of being assigned to every
-    // Ability.
     const orphanComponents = this.uniqueComponents().filter(component =>
       !ownedComponentSignatures.has(component.signature.toString())
     );
     if (orphanComponents.length > 0) {
-      const standalone = this.createBranch(
-        cfg,
-        abilityTails,
-        countLocal,
-        branchIndex++,
-      );
-      abilityTails = [standalone.ifBlock];
       const pageHead = this.buildPageScope(
         cfg,
-        standalone.invokeBlock,
-        countLocal,
-        branchIndex,
+        abilityHead,
         orphanComponents,
       );
-      branchIndex += this.pageBranchCount(orphanComponents);
       this.linkBlocks(pageHead, abilityHead);
-    }
-    for (const block of abilityTails) {
-      this.linkBlocks(block, abilityHead);
     }
 
     const returnBlock = new BasicBlock();
@@ -190,125 +137,132 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
   private buildPageScope(
     cfg: Cfg,
     predecessor: BasicBlock,
-    countLocal: Local,
-    firstBranchIndex: number,
     components: readonly ComponentInfo[],
   ): BasicBlock {
-    const pageHead = this.createLoopHead(cfg, predecessor);
-    let pageTails: BasicBlock[] = [pageHead];
-    let branchIndex = firstBranchIndex;
-
-    // Entering the visible scope always crosses onPageShow. M1 intentionally
-    // permits re-entering this branch without a preceding onPageHide.
-    const visible = this.createBranch(
+    const pageHead = this.createDispatchHead(cfg, predecessor);
+    const visibleEntry = this.addMethodDispatch(
       cfg,
-      pageTails,
-      countLocal,
-      branchIndex++,
-    );
-    this.addComponentStage(
-      visible.invokeBlock,
-      ComponentLifecycleStage.PAGE_SHOW,
-      components,
-    );
-    pageTails = [visible.ifBlock];
+      pageHead,
+      this.componentStageInvocations(
+        components,
+        ComponentLifecycleStage.PAGE_SHOW,
+      ),
+    ) ?? pageHead;
     const eventHead = this.buildVisibleEventScope(
       cfg,
-      visible.invokeBlock,
-      countLocal,
-      branchIndex,
+      visibleEntry,
       components,
     );
-    branchIndex += this.uiCallbackCount(components);
     this.linkBlocks(eventHead, pageHead);
 
-    // Hiding a page returns to the Page scope. UI events are reachable only by
-    // taking the visible branch again, which invokes onPageShow first.
-    const hide = this.createBranch(
+    this.addReturningMethodDispatch(
       cfg,
-      pageTails,
-      countLocal,
-      branchIndex++,
+      pageHead,
+      this.componentStageInvocations(
+        components,
+        ComponentLifecycleStage.PAGE_HIDE,
+      ),
     );
-    this.addComponentStage(
-      hide.invokeBlock,
-      ComponentLifecycleStage.PAGE_HIDE,
-      components,
-    );
-    this.linkBlocks(hide.invokeBlock, pageHead);
-    pageTails = [hide.ifBlock];
 
     for (const component of components) {
       const instance = this.getOrCreateClassInstance(component.arkClass);
       for (const stage of COMPONENT_PAGE_SCOPE_STAGES) {
         const method = component.lifecycleMethods.get(stage);
-        if (!method) continue;
-        pageTails = this.addMethodBranch(
-          cfg,
-          pageTails,
-          countLocal,
-          branchIndex++,
-          [[instance, method]],
-        );
+        if (method) {
+          this.addReturningMethodDispatch(
+            cfg,
+            pageHead,
+            [[instance, method]],
+          );
+        }
       }
 
+      const reusePair: Array<[Local, ArkMethod]> = [];
       const recycle = component.lifecycleMethods.get(
         ComponentLifecycleStage.ABOUT_TO_RECYCLE,
       );
       const reuse = component.lifecycleMethods.get(
         ComponentLifecycleStage.ABOUT_TO_REUSE,
       );
-      const reusePair: Array<[Local, ArkMethod]> = [];
       if (recycle) reusePair.push([instance, recycle]);
       if (reuse) reusePair.push([instance, reuse]);
-      if (reusePair.length > 0) {
-        pageTails = this.addMethodBranch(
-          cfg,
-          pageTails,
-          countLocal,
-          branchIndex++,
-          reusePair,
-        );
-      }
+      this.addReturningMethodDispatch(cfg, pageHead, reusePair);
     }
 
-    for (const block of pageTails) {
-      this.linkBlocks(block, pageHead);
-    }
     return pageHead;
   }
 
   private buildVisibleEventScope(
     cfg: Cfg,
     predecessor: BasicBlock,
-    countLocal: Local,
-    firstBranchIndex: number,
     components: readonly ComponentInfo[],
   ): BasicBlock {
-    const eventHead = this.createLoopHead(cfg, predecessor);
-    let eventTails: BasicBlock[] = [eventHead];
-    let branchIndex = firstBranchIndex;
+    const eventHead = this.createDispatchHead(cfg, predecessor);
+    if (!this.config.enableFineGrainedUICallbacks) return eventHead;
 
-    if (this.config.enableFineGrainedUICallbacks) {
-      for (const component of components) {
-        const instance = this.getOrCreateClassInstance(component.arkClass);
-        for (const callback of component.uiCallbacks) {
-          const branch = this.createBranch(
-            cfg,
-            eventTails,
-            countLocal,
-            branchIndex++,
-          );
-          this.addUICallbackInvocation(branch.invokeBlock, instance, callback);
-          eventTails = [branch.ifBlock, branch.invokeBlock];
+    for (const component of components) {
+      const instance = this.getOrCreateClassInstance(component.arkClass);
+      for (const callback of component.uiCallbacks) {
+        const callbackBlock = this.addCallbackDispatch(
+          cfg,
+          eventHead,
+          instance,
+          callback,
+        );
+        this.linkBlocks(callbackBlock, eventHead);
+      }
+    }
+    return eventHead;
+  }
+
+  /**
+   * Keep configured entry Abilities and their statically resolved startAbility
+   * closure. An unresolved startAbility target disables pruning for soundness.
+   */
+  private retainReachableModelElements(): void {
+    const allAbilities = this.abilities;
+    const entries = allAbilities.filter(ability => ability.isEntry);
+    if (entries.length === 0) return;
+
+    const byName = new Map(
+      allAbilities.map(ability => [ability.name.toLowerCase(), ability]),
+    );
+    const reachable = new Set<AbilityInfo>();
+    const pending = [...entries];
+    while (pending.length > 0) {
+      const ability = pending.pop()!;
+      if (reachable.has(ability)) continue;
+      reachable.add(ability);
+      if (ability.hasUnresolvedAbilityNavigation) return;
+      for (const target of ability.navigationTargets) {
+        if (target.navigationType !== NavigationType.START_ABILITY) continue;
+        const targetName = target.targetAbilityName
+          .split(/[/.]/)
+          .filter(Boolean)
+          .at(-1)
+          ?.toLowerCase();
+        const targetAbility = targetName ? byName.get(targetName) : undefined;
+        if (targetAbility && !reachable.has(targetAbility)) {
+          pending.push(targetAbility);
         }
       }
     }
 
-    for (const block of eventTails) {
-      this.linkBlocks(block, eventHead);
-    }
-    return eventHead;
+    const allOwned = new Set(
+      allAbilities.flatMap(ability =>
+        ability.components.map(component => component.signature.toString())
+      ),
+    );
+    const reachableOwned = new Set(
+      [...reachable].flatMap(ability =>
+        ability.components.map(component => component.signature.toString())
+      ),
+    );
+    this.abilities = allAbilities.filter(ability => reachable.has(ability));
+    this.components = this.components.filter(component => {
+      const signature = component.signature.toString();
+      return !allOwned.has(signature) || reachableOwned.has(signature);
+    });
   }
 
   private addClassInstances(entryBlock: BasicBlock): void {
@@ -338,19 +292,19 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     }
   }
 
-  private addAbilityStageFor(
-    block: BasicBlock,
+  private addAbilityStageDispatch(
+    cfg: Cfg,
+    dispatcher: BasicBlock,
     ability: AbilityInfo,
     stage: AbilityLifecycleMethodStage,
   ): void {
     const method = ability.lifecycleMethods.get(stage);
-    if (method) {
-      this.addMethodInvocation(
-        block,
-        this.getOrCreateClassInstance(ability.arkClass),
-        method,
-      );
-    }
+    if (!method) return;
+    this.addReturningMethodDispatch(
+      cfg,
+      dispatcher,
+      [[this.getOrCreateClassInstance(ability.arkClass), method]],
+    );
   }
 
   private addAbilityStages(
@@ -367,16 +321,29 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     stage: ComponentLifecycleStage,
     components: readonly ComponentInfo[] = this.uniqueComponents(),
   ): void {
+    for (const [instance, method] of this.componentStageInvocations(
+      components,
+      stage,
+    )) {
+      this.addMethodInvocation(block, instance, method);
+    }
+  }
+
+  private componentStageInvocations(
+    components: readonly ComponentInfo[],
+    stage: ComponentLifecycleStage,
+  ): Array<[Local, ArkMethod]> {
+    const result: Array<[Local, ArkMethod]> = [];
     for (const component of components) {
       const method = component.lifecycleMethods.get(stage);
       if (method) {
-        this.addMethodInvocation(
-          block,
+        result.push([
           this.getOrCreateClassInstance(component.arkClass),
           method,
-        );
+        ]);
       }
     }
+    return result;
   }
 
   private otherAbilityMethods(ability: AbilityInfo): Array<[Local, ArkMethod]> {
@@ -398,53 +365,48 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     return result;
   }
 
-  private addMethodBranch(
+  private addReturningMethodDispatch(
     cfg: Cfg,
-    predecessors: BasicBlock[],
-    countLocal: Local,
-    branchIndex: number,
+    dispatcher: BasicBlock,
     invocations: Array<[Local, ArkMethod]>,
-  ): BasicBlock[] {
-    const branch = this.createBranch(
+  ): void {
+    const invocationBlock = this.addMethodDispatch(
       cfg,
-      predecessors,
-      countLocal,
-      branchIndex,
+      dispatcher,
+      invocations,
     );
-    for (const [instance, method] of invocations) {
-      this.addMethodInvocation(branch.invokeBlock, instance, method);
-    }
-    return [branch.ifBlock, branch.invokeBlock];
+    if (invocationBlock) this.linkBlocks(invocationBlock, dispatcher);
   }
 
-  private createBranch(
+  private addMethodDispatch(
     cfg: Cfg,
-    predecessors: BasicBlock[],
-    countLocal: Local,
-    branchIndex: number,
-  ): { ifBlock: BasicBlock; invokeBlock: BasicBlock } {
-    const ifBlock = new BasicBlock();
-    ifBlock.addStmt(
-      new ArkIfStmt(
-        new ArkConditionExpr(
-          countLocal,
-          new Constant(branchIndex.toString(), NumberType.getInstance()),
-          RelationalBinaryOperator.Equality,
-        ),
-      ),
-    );
-    cfg.addBlock(ifBlock);
-    for (const predecessor of predecessors) {
-      this.linkBlocks(predecessor, ifBlock);
-    }
-
+    dispatcher: BasicBlock,
+    invocations: Array<[Local, ArkMethod]>,
+  ): BasicBlock | undefined {
+    if (invocations.length === 0) return undefined;
     const invokeBlock = new BasicBlock();
+    for (const [instance, method] of invocations) {
+      this.addMethodInvocation(invokeBlock, instance, method);
+    }
     cfg.addBlock(invokeBlock);
-    this.linkBlocks(ifBlock, invokeBlock);
-    return { ifBlock, invokeBlock };
+    this.linkBlocks(dispatcher, invokeBlock);
+    return invokeBlock;
   }
 
-  private createLoopHead(cfg: Cfg, predecessor: BasicBlock): BasicBlock {
+  private addCallbackDispatch(
+    cfg: Cfg,
+    dispatcher: BasicBlock,
+    instance: Local,
+    callback: UICallbackInfo,
+  ): BasicBlock {
+    const callbackBlock = new BasicBlock();
+    this.addUICallbackInvocation(callbackBlock, instance, callback);
+    cfg.addBlock(callbackBlock);
+    this.linkBlocks(dispatcher, callbackBlock);
+    return callbackBlock;
+  }
+
+  private createDispatchHead(cfg: Cfg, predecessor: BasicBlock): BasicBlock {
     const block = new BasicBlock();
     block.addStmt(
       new ArkIfStmt(
@@ -458,30 +420,6 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     cfg.addBlock(block);
     this.linkBlocks(predecessor, block);
     return block;
-  }
-
-  private pageBranchCount(components: readonly ComponentInfo[]): number {
-    let count = 2 + this.uiCallbackCount(components);
-    for (const component of components) {
-      count += COMPONENT_PAGE_SCOPE_STAGES.filter(stage =>
-        component.lifecycleMethods.has(stage)
-      ).length;
-      if (component.lifecycleMethods.has(ComponentLifecycleStage.ABOUT_TO_RECYCLE) ||
-        component.lifecycleMethods.has(ComponentLifecycleStage.ABOUT_TO_REUSE)) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  private uiCallbackCount(
-    components: readonly ComponentInfo[] = this.uniqueComponents(),
-  ): number {
-    if (!this.config.enableFineGrainedUICallbacks) return 0;
-    return components.reduce(
-      (sum, component) => sum + component.uiCallbacks.length,
-      0,
-    );
   }
 
   private uniqueComponents(

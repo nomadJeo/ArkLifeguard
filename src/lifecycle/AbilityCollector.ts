@@ -35,6 +35,7 @@ import {
     BackupExtensionLifecycleStage,
     FormExtensionLifecycleStage,
     ComponentLifecycleStage,
+    NavigationType,
 } from './LifecycleTypes';
 import { NavigationAnalyzer } from './NavigationAnalyzer';
 
@@ -313,7 +314,7 @@ export class AbilityCollector {
         
         // 阶段 1: 遍历 Scene 中的所有类，收集 Ability 基本信息
         for (const arkClass of this.scene.getClasses()) {
-            if (this.isAbilityClass(arkClass)) {
+            if (this.isAbilityClass(arkClass) && !this.isTestAbilityClass(arkClass)) {
                 const abilityInfo = this.buildAbilityInfo(arkClass);
                 abilities.push(abilityInfo);
                 this.abilityCache.set(arkClass.getSignature(), abilityInfo);
@@ -330,6 +331,7 @@ export class AbilityCollector {
         for (const ability of abilities) {
             this.analyzeNavigationTargets(ability);
         }
+        this.analyzeComponentAbilityNavigation(abilities);
         
         return abilities;
     }
@@ -435,6 +437,7 @@ export class AbilityCollector {
             components: [], // 将在后续填充
             navigationTargets: [], // 将在后续填充
             isEntry: this.checkIsEntryAbility(arkClass),
+            hasUnresolvedAbilityNavigation: false,
         };
         
         return info;
@@ -557,10 +560,65 @@ export class AbilityCollector {
         
         // 输出警告信息
         for (const warning of analysisResult.warnings) {
+            if (warning.includes('startAbility')) {
+                ability.hasUnresolvedAbilityNavigation = true;
+            }
             console.warn(`[AbilityCollector] Warning: ${warning}`);
         }
         
         console.log(`[AbilityCollector] Found ${ability.navigationTargets.length} navigation targets for ${ability.name}`);
+    }
+
+    /**
+     * Attribute startAbility calls in page/component methods to their owning
+     * Ability. If the component owner is unknown, disable M1 Ability pruning
+     * because the call may be reachable from any retained page scope.
+     */
+    private analyzeComponentAbilityNavigation(abilities: AbilityInfo[]): void {
+        for (const component of this.componentCache.values()) {
+            const analysisResult = this.navigationAnalyzer.analyzeClass(
+                component.arkClass
+            );
+            const targets = analysisResult.navigationTargets.filter(target =>
+                target.navigationType === NavigationType.START_ABILITY
+            );
+            const hasUnresolvedTarget = analysisResult.warnings.some(warning =>
+                warning.includes('startAbility')
+            );
+            if (targets.length === 0 && !hasUnresolvedTarget) continue;
+
+            const owners = abilities.filter(ability =>
+                ability.components.some(owned =>
+                    owned.signature.toString() === component.signature.toString()
+                )
+            );
+            if (owners.length === 0) {
+                for (const ability of abilities) {
+                    ability.hasUnresolvedAbilityNavigation = true;
+                }
+                console.warn(
+                    `[AbilityCollector] Component ${component.name} contains ` +
+                    'startAbility but has no resolved Ability owner; ' +
+                    'Ability pruning will be disabled.'
+                );
+                continue;
+            }
+
+            for (const owner of owners) {
+                for (const target of targets) {
+                    const duplicate = owner.navigationTargets.some(existing =>
+                        existing.navigationType === NavigationType.START_ABILITY &&
+                        existing.targetAbilityName === target.targetAbilityName &&
+                        existing.sourceMethod.getSignature().toString() ===
+                            target.sourceMethod.getSignature().toString()
+                    );
+                    if (!duplicate) owner.navigationTargets.push(target);
+                }
+                if (hasUnresolvedTarget) {
+                    owner.hasUnresolvedAbilityNavigation = true;
+                }
+            }
+        }
     }
     
     /**
@@ -626,6 +684,14 @@ export class AbilityCollector {
             console.log(`[AbilityCollector] ${className} is entry ability (heuristic)`);
         }
         return isEntry;
+    }
+
+    /** Test-source Abilities are not runtime application entry points. */
+    private isTestAbilityClass(arkClass: ArkClass): boolean {
+        const filePath = arkClass.getDeclaringArkFile().getFilePath()
+            .replace(/\\/g, '/');
+        return /(^|\/)ohosTest(\/|$)/i.test(filePath) ||
+            /\/src\/test(\/|$)/i.test(filePath);
     }
     
     /**

@@ -35,4 +35,21 @@ describe('Nullness late null guard', () => {
             diagnostic.dereferenceStmt.getOriginalText()?.includes('safeAccount.active')
         )).toBe(false);
     });
+
+    it('separates lifecycle-root and supplemental-root IFDS statistics', () => {
+        const result = new NullnessAnalysisRunner(buildScene(), {
+            collectSolverStatistics: true,
+        }).runFromDummyMain();
+
+        expect(result.success, result.error).toBe(true);
+        expect(result.solverBreakdown?.lifecycle).toBeDefined();
+        expect(result.solverStatistics?.processedEdges).toBe(
+            (result.solverBreakdown?.lifecycle?.processedEdges ?? 0) +
+            (result.solverBreakdown?.supplemental?.processedEdges ?? 0)
+        );
+        expect(result.solverStatistics?.solveTimeMs).toBe(
+            (result.solverBreakdown?.lifecycle?.solveTimeMs ?? 0) +
+            (result.solverBreakdown?.supplemental?.solveTimeMs ?? 0)
+        );
+    });
 });

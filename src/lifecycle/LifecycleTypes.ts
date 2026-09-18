@@ -161,6 +161,9 @@ export interface AbilityInfo {
 
   /** 是否是入口 Ability（在 module.json5 中配置） */
   isEntry: boolean;
+
+  /** 是否存在无法静态解析目标的 startAbility 调用。 */
+  hasUnresolvedAbilityNavigation: boolean;
 }
 
 /**

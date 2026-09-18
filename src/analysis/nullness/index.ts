@@ -35,5 +35,7 @@ export { ArkUiArgumentSummary } from './library/ArkUiArgumentSummary';
 export {
     NullnessAnalysisResult,
     NullnessAnalysisRunner,
+    NullnessLifecycleModelStatistics,
     NullnessRunnerConfig,
+    NullnessSolverBreakdown,
 } from './NullnessAnalysisRunner';

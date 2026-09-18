@@ -21,6 +21,21 @@ describe('NavigationAnalyzer', () => {
         expect(result.warnings).toEqual([]);
     });
 
+    it('resolves a startAbility target from a Want object literal', () => {
+        const scene = buildLifecycleScene('multi-ability');
+        const result = new NavigationAnalyzer(scene).analyzeClass(
+            getClass(scene, 'EntryAbility')
+        );
+
+        expect(result.navigationTargets).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                targetAbilityName: 'SecondAbility',
+                navigationType: NavigationType.START_ABILITY,
+            }),
+        ]));
+        expect(result.warnings).toEqual([]);
+    });
+
     describe('router calls', () => {
         let scene: Scene;
         let analyzer: NavigationAnalyzer;

@@ -27,6 +27,10 @@ describe('lifecycle scope embedding', () => {
             buildLifecycleScene('ability-scope-nesting')
         );
         creator.create();
+        expect(creator.getAbilities().map(ability => ability.name)).toEqual([
+            'EntryAbility',
+            'SecondAbility',
+        ]);
         const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
         const findBlock = (text: string): BasicBlock => {
             const block = blocks.find(candidate => candidate.getStmts()

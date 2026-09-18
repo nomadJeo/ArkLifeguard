@@ -60,7 +60,22 @@ export interface NullnessAnalysisResult {
     diagnostics: readonly NullDereferenceDiagnostic[];
     reachedFacts: Map<Stmt, NullnessFact[]>;
     solverStatistics?: Readonly<IFDSSolverStatistics>;
+    solverBreakdown?: NullnessSolverBreakdown;
+    lifecycleModelStatistics?: NullnessLifecycleModelStatistics;
     error?: string;
+}
+
+export interface NullnessLifecycleModelStatistics {
+    abilities: number;
+    components: number;
+    blocks: number;
+    edges: number;
+}
+
+export interface NullnessSolverBreakdown {
+    lifecycle?: Readonly<IFDSSolverStatistics>;
+    supplemental?: Readonly<IFDSSolverStatistics>;
+    supplementalRootCount: number;
 }
 
 export const NULLNESS_LIFECYCLE_ORDER: AbilityLifecycleMethodStage[] = [
@@ -109,7 +124,21 @@ export class NullnessAnalysisRunner {
                 } as Partial<LifecycleModelConfig>
             );
             creator.create();
-            return this.runWithDummyMain(creator.getDummyMain());
+            const dummyMain = creator.getDummyMain();
+            const result = this.runWithDummyMain(dummyMain);
+            const blocks = [...dummyMain.getCfg()!.getBlocks()];
+            return {
+                ...result,
+                lifecycleModelStatistics: {
+                    abilities: creator.getAbilities().length,
+                    components: creator.getComponents().length,
+                    blocks: blocks.length,
+                    edges: blocks.reduce(
+                        (sum, block) => sum + block.getSuccessors().length,
+                        0
+                    ),
+                },
+            };
         } catch (error) {
             return this.analysisFailure(error);
         }
@@ -156,13 +185,13 @@ export class NullnessAnalysisRunner {
             // last root finishes, which makes large projects peak at the sum of
             // all root-state spaces. Sequential roots preserve the same union of
             // diagnostics/reached facts while allowing contextual edges to die.
-            const collectedStatistics: IFDSSolverStatistics[] = [];
             const solver = new NullnessSolver(problem, this.scene, [], {
                 collectStatistics: this.config.collectSolverStatistics,
             });
             solver.solve();
             const mainStatistics = solver.getStatistics();
-            if (mainStatistics) collectedStatistics.push({ ...mainStatistics });
+            const supplementalStatistics: IFDSSolverStatistics[] = [];
+            let supplementalRootCount = 0;
             const diagnostics = [...problem.getNullDereferences()];
             const reachedFacts = solver.getReachedFacts();
             for (const method of supplementalRoots) {
@@ -170,6 +199,7 @@ export class NullnessAnalysisRunner {
                 const supplementalEntry = supplementalCfg?.getStartingStmt() ??
                     supplementalCfg?.getStartingBlock()?.getHead();
                 if (!supplementalCfg || !supplementalEntry) continue;
+                supplementalRootCount++;
                 const supplementalProblem = new NullnessProblem(
                     supplementalEntry,
                     method,
@@ -183,9 +213,9 @@ export class NullnessAnalysisRunner {
                     { collectStatistics: this.config.collectSolverStatistics }
                 );
                 supplementalSolver.solve();
-                const supplementalStatistics = supplementalSolver.getStatistics();
-                if (supplementalStatistics) {
-                    collectedStatistics.push({ ...supplementalStatistics });
+                const rootStatistics = supplementalSolver.getStatistics();
+                if (rootStatistics) {
+                    supplementalStatistics.push({ ...rootStatistics });
                 }
                 this.mergeDiagnostics(
                     diagnostics,
@@ -201,7 +231,17 @@ export class NullnessAnalysisRunner {
                 entryMethod: dummyMain.getSignature().toString(),
                 diagnostics,
                 reachedFacts,
-                solverStatistics: this.aggregateSolverStatistics(collectedStatistics),
+                solverStatistics: this.aggregateSolverStatistics([
+                    ...(mainStatistics ? [{ ...mainStatistics }] : []),
+                    ...supplementalStatistics,
+                ]),
+                solverBreakdown: {
+                    lifecycle: mainStatistics,
+                    supplemental: this.aggregateSolverStatistics(
+                        supplementalStatistics
+                    ),
+                    supplementalRootCount,
+                },
             };
         } catch (error) {
             return this.analysisFailure(error);

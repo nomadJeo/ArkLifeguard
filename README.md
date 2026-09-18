@@ -142,7 +142,7 @@ Bench 用于衡量已有标注上的诊断精度，不生成持久化报告。�
 npm run test:lifecycle:benchmark
 ```
 
-实验步骤与实际结果分别记录在 [实验说明](docs/controlled_lifecycle_benchmark.md) 和 [实验结果](docs/controlled_lifecycle_benchmark_results.md)。
+实验步骤与实际结果分别记录在 [实验说明](docs/第一阶段实验/controlled_lifecycle_benchmark.md) 和 [实验结果](docs/第一阶段实验/controlled_lifecycle_benchmark_results.md)。
 
 ### 真实应用测试
 
@@ -190,6 +190,7 @@ npm run test:resource:real-apps -- \
 | `--max-propagation-depth <n>` | 默认 40 | 默认 40 | Fact 传播深度上限。 |
 | `--lifecycle-model <mode>` | 默认 `flat` | 默认 `flat` | 选择 `flat` 或 `hierarchical` 生命周期模型。 |
 | `--ifds-stats` | 支持 | 支持 | 在报告中保存 IFDS 求解时间和传播统计。 |
+| `--lifecycle-root-only` | 支持 | 不适用 | 空指针实验仅运行生命周期 DummyMain root，关闭 supplemental roots。 |
 
 真实应用集合的下载、版本固定和 `meta.json` 维护方式见 [HarmonyRealApps/README.md](./HarmonyRealApps/README.md)。完整参数可使用对应命令的 `--help` 查看。
 

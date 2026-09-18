@@ -9,7 +9,11 @@ import type { Sdk } from '../src/adapter/arkanalyzer';
 import { Scene, SceneConfig } from '../src/adapter/arkanalyzer';
 import type { LifecycleModelMode } from '../src/lifecycle';
 import type { IFDSSolverStatistics } from '../src/ifds';
-import { NullnessAnalysisRunner } from '../src/analysis/nullness/NullnessAnalysisRunner';
+import {
+    NullnessAnalysisRunner,
+    type NullnessSolverBreakdown,
+    type NullnessLifecycleModelStatistics,
+} from '../src/analysis/nullness/NullnessAnalysisRunner';
 
 type ProjectStatus = 'success' | 'failed' | 'timeout';
 
@@ -32,6 +36,7 @@ interface Options {
     timeoutMs: number;
     lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
     collectSolverStatistics: boolean;
+    lifecycleRootOnly: boolean;
     maxAccessPathLength: number;
     maxPropagationDepth: number;
     limit?: number;
@@ -68,12 +73,14 @@ interface ProjectResult {
     totalTimeMs: number;
     analysisTimeMs: number;
     solverStatistics?: Readonly<IFDSSolverStatistics>;
+    solverBreakdown?: NullnessSolverBreakdown;
+    lifecycleModelStatistics?: NullnessLifecycleModelStatistics;
     peakRssMB: number | null;
     diagnostics: DiagnosticRecord[];
 }
 
 interface RealAppsReport {
-    schemaVersion: 2;
+    schemaVersion: 3;
     analysisKind: 'null-dereference';
     updatedAt: string;
     completed: boolean;
@@ -82,6 +89,7 @@ interface RealAppsReport {
         timeoutMs: number;
         lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
         collectSolverStatistics: boolean;
+        lifecycleRootOnly: boolean;
         maxAccessPathLength: number;
         maxPropagationDepth: number;
     };
@@ -97,6 +105,9 @@ interface RealAppsReport {
         averageNullnessAnalysisTimeMs: number;
         totalIFDSSolveTimeMs: number;
         averageIFDSSolveTimeMs: number;
+        totalLifecycleIFDSSolveTimeMs: number;
+        totalSupplementalIFDSSolveTimeMs: number;
+        supplementalRootCount: number;
         averagePeakRssMB: number;
         maxPeakRssMB: number;
     };
@@ -126,6 +137,7 @@ function help(): void {
         '  --timeout-ms <n>          Per-project timeout; default: 600000',
         '  --lifecycle-model <mode>  flat or hierarchical; default: flat',
         '  --ifds-stats              Collect IFDS solver time and counters',
+        '  --lifecycle-root-only     Disable module-initializer/framework-sink roots',
         '  --max-access-path-length <n> Maximum tracked field depth; default: 5',
         '  --max-propagation-depth <n> Maximum fact propagation depth; default: 40',
         '  --list                    List projects from meta.json without analyzing',
@@ -165,6 +177,7 @@ function parseArgs(args: string[]): Options {
     let timeoutMs = 600_000;
     let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'> = 'flat';
     let collectSolverStatistics = false;
+    let lifecycleRootOnly = false;
     let maxAccessPathLength = 5;
     // Real projects can contain recursive framework/task call chains. A bound of
     // 40 retained the same AnimeZ diagnostics as 60 while avoiding context blow-up.
@@ -255,6 +268,10 @@ function parseArgs(args: string[]): Options {
             collectSolverStatistics = true;
             continue;
         }
+        if (arg === '--lifecycle-root-only') {
+            lifecycleRootOnly = true;
+            continue;
+        }
         if (arg === '--max-access-path-length') {
             maxAccessPathLength = parsePositiveInteger(optionValue(args, index, arg), arg);
             index++;
@@ -306,6 +323,7 @@ function parseArgs(args: string[]): Options {
         timeoutMs,
         lifecycleModel,
         collectSolverStatistics,
+        lifecycleRootOnly,
         maxAccessPathLength,
         maxPropagationDepth,
         limit,
@@ -413,6 +431,8 @@ function analyzeProject(
         const result = new NullnessAnalysisRunner(scene, {
             lifecycleModel: options.lifecycleModel,
             collectSolverStatistics: options.collectSolverStatistics,
+            analyzeModuleInitializers: !options.lifecycleRootOnly,
+            analyzeFrameworkSinkMethods: !options.lifecycleRootOnly,
             problem: {
                 maxAccessPathLength: options.maxAccessPathLength,
                 maxPropagationDepth: options.maxPropagationDepth,
@@ -431,6 +451,8 @@ function analyzeProject(
         record.reachedFacts = [...result.reachedFacts.values()]
             .reduce((sum, facts) => sum + facts.length, 0);
         record.solverStatistics = result.solverStatistics;
+        record.solverBreakdown = result.solverBreakdown;
+        record.lifecycleModelStatistics = result.lifecycleModelStatistics;
         record.diagnostics = result.diagnostics.map(diagnostic => ({
             nullness: diagnostic.nullness,
             accessPath: diagnostic.accessPath.toString(),
@@ -496,6 +518,21 @@ function updateSummary(report: RealAppsReport): void {
         averageIFDSSolveTimeMs: average(
             successes.map(project => project.solverStatistics?.solveTimeMs ?? 0)
         ),
+        totalLifecycleIFDSSolveTimeMs: successes.reduce(
+            (sum, project) => sum +
+                (project.solverBreakdown?.lifecycle?.solveTimeMs ?? 0),
+            0
+        ),
+        totalSupplementalIFDSSolveTimeMs: successes.reduce(
+            (sum, project) => sum +
+                (project.solverBreakdown?.supplemental?.solveTimeMs ?? 0),
+            0
+        ),
+        supplementalRootCount: successes.reduce(
+            (sum, project) => sum +
+                (project.solverBreakdown?.supplementalRootCount ?? 0),
+            0
+        ),
         averagePeakRssMB: average(peakRssValues),
         maxPeakRssMB: peakRssValues.length > 0 ? Math.max(...peakRssValues) : 0,
     };
@@ -507,7 +544,7 @@ function createReport(
 ): RealAppsReport {
     const now = new Date().toISOString();
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         analysisKind: 'null-dereference',
         updatedAt: now,
         completed: false,
@@ -516,6 +553,7 @@ function createReport(
             timeoutMs: options.timeoutMs,
             lifecycleModel: options.lifecycleModel,
             collectSolverStatistics: options.collectSolverStatistics,
+            lifecycleRootOnly: options.lifecycleRootOnly,
             maxAccessPathLength: options.maxAccessPathLength,
             maxPropagationDepth: options.maxPropagationDepth,
         },
@@ -531,6 +569,9 @@ function createReport(
             averageNullnessAnalysisTimeMs: 0,
             totalIFDSSolveTimeMs: 0,
             averageIFDSSolveTimeMs: 0,
+            totalLifecycleIFDSSolveTimeMs: 0,
+            totalSupplementalIFDSSolveTimeMs: 0,
+            supplementalRootCount: 0,
             averagePeakRssMB: 0,
             maxPeakRssMB: 0,
         },
@@ -599,6 +640,7 @@ function runParent(options: Options): void {
     console.log(
         `Nullness real-project evaluation: projects=${selected.length}, ` +
         `model=${options.lifecycleModel}, sdk=${options.sdkRoot}, ` +
+        `root=${options.lifecycleRootOnly ? 'lifecycle-only' : 'all'}, ` +
         `timeout=${options.timeoutMs}ms`
     );
 
@@ -621,6 +663,7 @@ function runParent(options: Options): void {
                 '--max-access-path-length', String(options.maxAccessPathLength),
                 '--max-propagation-depth', String(options.maxPropagationDepth),
                 ...(options.collectSolverStatistics ? ['--ifds-stats'] : []),
+                ...(options.lifecycleRootOnly ? ['--lifecycle-root-only'] : []),
             ],
             {
                 cwd: repositoryRoot,
@@ -662,7 +705,11 @@ function runParent(options: Options): void {
         console.log(
             `  ${record.status.toUpperCase()} diagnostics=${record.diagnosticCount} ` +
             `time=${record.totalTimeMs}ms analysis=${record.analysisTimeMs}ms ` +
-            `ifds=${record.solverStatistics?.solveTimeMs ?? 'n/a'}ms`
+            `ifds=${record.solverStatistics?.solveTimeMs ?? 'n/a'}ms ` +
+            `lifecycle=${record.solverBreakdown?.lifecycle?.solveTimeMs ?? 'n/a'}ms ` +
+            `supplemental=${record.solverBreakdown?.supplemental?.solveTimeMs ?? 0}ms ` +
+            `cfg=${record.lifecycleModelStatistics?.blocks ?? 'n/a'}/` +
+            `${record.lifecycleModelStatistics?.edges ?? 'n/a'}`
         );
         if (record.error) {
             console.log(`  error: ${record.error.split(/\r?\n/)[0]}`);

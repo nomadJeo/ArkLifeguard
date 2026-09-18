@@ -103,6 +103,7 @@ describe('interchangeable lifecycle model entry', () => {
             'onBackground',
             'handleClick',
         ]));
+        expect(blocks.every(block => block.getStmts().length > 0)).toBe(true);
     });
 
     it.each(['flat', 'hierarchical'] as const)(

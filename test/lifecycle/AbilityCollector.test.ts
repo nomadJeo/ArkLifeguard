@@ -4,6 +4,7 @@ import { AbilityCollector } from '../../src/lifecycle/AbilityCollector';
 import {
     AbilityLifecycleStage,
     ComponentLifecycleStage,
+    NavigationType,
 } from '../../src/lifecycle/LifecycleTypes';
 import { buildLifecycleScene } from '../helpers/buildScene';
 
@@ -67,5 +68,27 @@ describe('AbilityCollector', () => {
         );
         expect(abilities.find(ability => ability.name === 'EntryAbility')?.isEntry).toBe(true);
         expect(abilities.find(ability => ability.name === 'SecondAbility')?.isEntry).toBe(false);
+    });
+
+    it('excludes ohosTest abilities from application lifecycle collection', () => {
+        const abilities = new AbilityCollector(
+            buildLifecycleScene('ability-scope-nesting')
+        ).collectAllAbilities();
+
+        expect(abilities.map(ability => ability.name)).not.toContain('TestAbility');
+        expect(abilities.map(ability => ability.name)).toContain('UnusedAbility');
+    });
+
+    it('attributes component startAbility targets to the owning ability', () => {
+        const abilities = new AbilityCollector(
+            buildLifecycleScene('ability-scope-nesting')
+        ).collectAllAbilities();
+        const entry = abilities.find(ability => ability.name === 'EntryAbility');
+        const target = entry?.navigationTargets.find(candidate =>
+            candidate.navigationType === NavigationType.START_ABILITY
+        );
+
+        expect(target?.targetAbilityName).toBe('SecondAbility');
+        expect(target?.sourceMethod.getDeclaringArkClass().getName()).toBe('EntryPage');
     });
 });

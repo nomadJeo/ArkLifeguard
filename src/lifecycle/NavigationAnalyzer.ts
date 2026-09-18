@@ -897,9 +897,16 @@ export class NavigationAnalyzer {
    * ```
    */
   private extractUrlFromAnonymousClass(classType: ClassType): string | null {
+    return this.extractStringFieldFromAnonymousClass(classType, "url");
+  }
+
+  private extractStringFieldFromAnonymousClass(
+    classType: ClassType,
+    fieldName: string,
+  ): string | null {
     const className = classType.getClassSignature().getClassName();
     console.log(
-      `[NavigationAnalyzer] Extracting url from anonymous class: ${className}`,
+      `[NavigationAnalyzer] Extracting ${fieldName} from anonymous class: ${className}`,
     );
 
     // 获取匿名类
@@ -911,9 +918,8 @@ export class NavigationAnalyzer {
       return null;
     }
 
-    // 查找 url 字段
     for (const field of arkClass.getFields()) {
-      if (field.getName() === "url") {
+      if (field.getName() === fieldName) {
         // 获取字段的初始值
         const initializer = field.getInitializer();
         if (initializer) {
@@ -925,11 +931,11 @@ export class NavigationAnalyzer {
               rightOp instanceof Constant &&
               rightOp.getType() instanceof StringType
             ) {
-              const urlValue = rightOp.getValue();
+              const fieldValue = rightOp.getValue();
               console.log(
-                `[NavigationAnalyzer] Found url in anonymous class field: ${urlValue}`,
+                `[NavigationAnalyzer] Found ${fieldName} in anonymous class field: ${fieldValue}`,
               );
-              return urlValue;
+              return fieldValue;
             }
           }
 
@@ -941,7 +947,7 @@ export class NavigationAnalyzer {
           const match = initStr.match(/=\s*'([^']+)'/);
           if (match) {
             console.log(
-              `[NavigationAnalyzer] Extracted url from initializer string: ${match[1]}`,
+              `[NavigationAnalyzer] Extracted ${fieldName} from initializer string: ${match[1]}`,
             );
             return match[1];
           }
@@ -949,7 +955,9 @@ export class NavigationAnalyzer {
       }
     }
 
-    console.log(`[NavigationAnalyzer] No url field found in anonymous class`);
+    console.log(
+      `[NavigationAnalyzer] No ${fieldName} field found in anonymous class`,
+    );
     return null;
   }
 
@@ -1016,6 +1024,18 @@ export class NavigationAnalyzer {
     const declaringStmt = local.getDeclaringStmt();
     if (!declaringStmt || !(declaringStmt instanceof ArkAssignStmt)) {
       return null;
+    }
+
+    const rightOp = declaringStmt.getRightOp();
+    if (rightOp instanceof Local) {
+      return this.findAbilityNameInWantInit(rightOp);
+    }
+    if (rightOp instanceof ArkNewExpr) {
+      const abilityName = this.extractStringFieldFromAnonymousClass(
+        rightOp.getClassType(),
+        "abilityName",
+      );
+      if (abilityName) return abilityName;
     }
 
     const cfg = declaringStmt.getCfg();

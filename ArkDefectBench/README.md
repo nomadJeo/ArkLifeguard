@@ -92,7 +92,7 @@ npm run test:nullness:bench -- --case Lifecycle.Component.StateReset
 
 `Lifecycle Modeling/` 是 RQ1 的 controlled benchmark。它与空指针语义套件分开维护 oracle，因为这里的 `expected` 表示某个生命周期模型是否保留路径，并不直接表示程序是否存在 bug。
 
-详细实验步骤见 [实验说明](../docs/controlled_lifecycle_benchmark.md)，当前观测见 [实验结果](../docs/controlled_lifecycle_benchmark_results.md)。运行命令：
+详细实验步骤见 [实验说明](../docs/第一阶段实验/controlled_lifecycle_benchmark.md)，当前观测见 [实验结果](../docs/第一阶段实验/controlled_lifecycle_benchmark_results.md)。运行命令：
 
 ```bash
 npm run test:lifecycle:benchmark

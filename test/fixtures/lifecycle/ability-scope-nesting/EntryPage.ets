@@ -5,6 +5,11 @@ struct EntryPage {
     }
 
     handleEntryTap(): void {
+        let want: Want = {
+            bundleName: 'com.example.scope',
+            abilityName: 'SecondAbility'
+        };
+        getContext(this).startAbility(want);
         console.info('EntryPage tap');
     }
 
