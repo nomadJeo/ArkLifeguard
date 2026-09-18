@@ -23,6 +23,7 @@ export {
   ArkAwaitExpr,
   ArkInstanceOfExpr,
   ArkInstanceInvokeExpr,
+  ArkPtrInvokeExpr,
   ArkNormalBinopExpr,
   ArkUnopExpr,
   ArkNewExpr,

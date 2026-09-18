@@ -1,4 +1,4 @@
-import type { ArkInvokeStmt, ArkMethod, Stmt } from '../../adapter/arkanalyzer';
+import type { ArkMethod, Stmt } from '../../adapter/arkanalyzer';
 
 /**
  * Graph queries required by the IFDS solver.
@@ -17,8 +17,8 @@ export interface InterproceduralCFG {
     isCallStatement(stmt: Stmt): boolean;
     isExitStatement(stmt: Stmt): boolean;
 
-    getAllCalleeMethods(call: ArkInvokeStmt): Set<ArkMethod>;
-    getCalleesOfCallAt(call: ArkInvokeStmt): Set<ArkMethod>;
+    getAllCalleeMethods(call: Stmt): Set<ArkMethod>;
+    getCalleesOfCallAt(call: Stmt): Set<ArkMethod>;
     getReturnSiteOfCallAt(call: Stmt): Stmt | null;
     getExceptionalReturnSitesOfCallAt(call: Stmt): readonly Stmt[];
     getStartPointOf(method: ArkMethod): Stmt | null;
