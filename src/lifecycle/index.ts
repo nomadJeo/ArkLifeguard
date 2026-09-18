@@ -90,6 +90,7 @@ export {
     FlatLifecycleModelCreator,
     BackEdgeLifecycleModelCreator,
 } from './BackEdgeLifecycleModelCreator';
+export { HierarchicalLifecycleModelCreator } from './HierarchicalLifecycleModelCreator';
 export {
     createLifecycleModelCreator,
     DEFAULT_LIFECYCLE_MODEL_MODE,

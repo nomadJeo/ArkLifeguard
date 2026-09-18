@@ -9,6 +9,7 @@ struct Index {
   private hiddenResource: PageResource | null = new PageResource();
 
   onPageShow(): void {
+    this.hiddenResource = new PageResource();
     this.visibleResource = null; // BENCH_SOURCE: visible-page-event
   }
 

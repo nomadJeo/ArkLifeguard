@@ -64,4 +64,18 @@ M0 没有 Ability → WindowStage → Page → Component 的嵌套 lifetime scop
 
 ## 本阶段明确未做
 
-本阶段没有实现 M1 Hierarchical Model，也没有实现 M2 Hierarchical + Local State Machines；没有把生命周期状态加入 IFDS fact，也没有修改 IFDS solver。
+## M1 Hierarchical 模型
+
+M1 已通过 `lifecycleModel = hierarchical` 提供。它把 M0 的全局循环拆成三层作用域：
+
+```text
+Ability dispatcher
+  └─ Foreground entry
+       └─ Page dispatcher
+            └─ Page-show entry
+                 └─ Visible UI-event dispatcher
+```
+
+`onBackground` 或 `onPageHide` 返回外层作用域；再次执行 UI callback 前必须重新经过 `onForeground` 和 `onPageShow`。每层内部仍允许非确定重复，因此连续 `onForeground` 和连续 `onPageShow` 仍然存在，留给 M2 的局部状态机处理。
+
+M1 没有把生命周期状态加入 IFDS fact，也没有修改 IFDS solver。M2 Hierarchical + Local State Machines 尚未实现。

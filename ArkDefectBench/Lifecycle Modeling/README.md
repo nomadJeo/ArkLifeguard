@@ -8,4 +8,4 @@
 
 实验设计见 [实验说明](../../docs/controlled_lifecycle_benchmark.md)，已经运行的结果见 [实验结果](../../docs/controlled_lifecycle_benchmark_results.md)。
 
-这里的 `expected` 表示模型是否保留一条路径。它与 `Null Pointer Dereference/null_pointer_expected.json` 中的 `expected.bug` 含义不同。
+这里的 `expected` 表示模型是否保留一条路径。它与 `Null Pointer Dereference/null_pointer_expected.json` 中的 `expected.bug` 含义不同。当前测试实际运行 M0 和 M1；M2 仍是未来契约。

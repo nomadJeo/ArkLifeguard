@@ -17,8 +17,17 @@ import {
     TransitionBenchmarkCase,
 } from './ControlledLifecycleBenchmarkOracle';
 
-const diagnosticsByProject = new Map<string, readonly NullDereferenceDiagnostic[]>();
-const blocksByProject = new Map<string, BasicBlock[]>();
+type ImplementedLifecycleModel = Extract<ResearchLifecycleModel, 'flat' | 'hierarchical'>;
+
+const IMPLEMENTED_MODELS: readonly ImplementedLifecycleModel[] = [
+    'flat',
+    'hierarchical',
+];
+const diagnosticsByModelAndProject = new Map<
+    string,
+    readonly NullDereferenceDiagnostic[]
+>();
+const blocksByModelAndProject = new Map<string, BasicBlock[]>();
 
 const SDK_DIR = path.join(__dirname, '../fixtures/sdk');
 const sdk: Sdk = { name: 'test-sdk', path: SDK_DIR, moduleName: '' };
@@ -34,19 +43,27 @@ function buildControlledScene(project: string): Scene {
     return scene;
 }
 
-function runFlatNullness(project: string): readonly NullDereferenceDiagnostic[] {
-    const cached = diagnosticsByProject.get(project);
+function cacheKey(model: ImplementedLifecycleModel, project: string): string {
+    return `${model}:${project}`;
+}
+
+function runNullness(
+    model: ImplementedLifecycleModel,
+    project: string
+): readonly NullDereferenceDiagnostic[] {
+    const key = cacheKey(model, project);
+    const cached = diagnosticsByModelAndProject.get(key);
     if (cached) return cached;
     const result = new NullnessAnalysisRunner(buildControlledScene(project), {
-        lifecycleModel: 'flat',
+        lifecycleModel: model,
     }).runFromDummyMain();
     expect(result.success, result.error).toBe(true);
-    diagnosticsByProject.set(project, result.diagnostics);
+    diagnosticsByModelAndProject.set(key, result.diagnostics);
     return result.diagnostics;
 }
 
 function hasDiagnostic(
-    diagnostics: ReturnType<typeof runFlatNullness>,
+    diagnostics: readonly NullDereferenceDiagnostic[],
     source: string,
     dereference: string
 ): boolean {
@@ -61,22 +78,31 @@ function blockInvokes(block: BasicBlock, methodName: string): boolean {
         ?.getMethodSignature().getMethodSubSignature().getMethodName() === methodName);
 }
 
-function flatBlocks(project: string): BasicBlock[] {
-    const cached = blocksByProject.get(project);
+function modelBlocks(
+    model: ImplementedLifecycleModel,
+    project: string
+): BasicBlock[] {
+    const key = cacheKey(model, project);
+    const cached = blocksByModelAndProject.get(key);
     if (cached) return cached;
     const creator = createLifecycleModelCreator(
         buildControlledScene(project),
-        'flat'
+        model
     );
     creator.create();
     const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
-    blocksByProject.set(project, blocks);
+    blocksByModelAndProject.set(key, blocks);
     return blocks;
 }
 
 /** Reach the next callback without crossing another callback invocation. */
-function hasImmediateTransition(project: string, from: string, to: string): boolean {
-    const blocks = flatBlocks(project);
+function hasImmediateTransition(
+    model: ImplementedLifecycleModel,
+    project: string,
+    from: string,
+    to: string
+): boolean {
+    const blocks = modelBlocks(model, project);
     const source = blocks.find(block => blockInvokes(block, from));
     const target = blocks.find(block => blockInvokes(block, to));
     expect(source, `missing callback ${from}`).toBeDefined();
@@ -118,18 +144,20 @@ describe('controlled lifecycle benchmark oracle', () => {
     });
 });
 
-describe('current M0 flat observations', () => {
-    it.each(nullnessCases)('$id matches its flat nullness oracle', item => {
-        const diagnostics = runFlatNullness(item.project);
-        expect(hasDiagnostic(
-            diagnostics,
-            item.source,
-            item.dereference
-        )).toBe(item.expected.flat);
-    });
+for (const model of IMPLEMENTED_MODELS) {
+    describe(`${model} observations`, () => {
+        it.each(nullnessCases)(`$id matches its ${model} nullness oracle`, item => {
+            const diagnostics = runNullness(model, item.project);
+            expect(hasDiagnostic(
+                diagnostics,
+                item.source,
+                item.dereference
+            )).toBe(item.expected[model]);
+        });
 
-    it.each(transitionCases)('$id matches its flat transition oracle', item => {
-        expect(hasImmediateTransition(item.project, item.from, item.to))
-            .toBe(item.expected.flat);
+        it.each(transitionCases)(`$id matches its ${model} transition oracle`, item => {
+            expect(hasImmediateTransition(model, item.project, item.from, item.to))
+                .toBe(item.expected[model]);
+        });
     });
-});
+}

@@ -7,6 +7,7 @@ import {
     NullDereferenceDiagnostic,
     NullnessAnalysisRunner,
 } from '../../src/analysis/nullness';
+import type { LifecycleModelMode } from '../../src/lifecycle';
 
 interface ProgramPoint {
     class: string;
@@ -57,6 +58,10 @@ const CALLBACK_ITERATIONS = process.env.ARK_LIFECYCLE_CALLBACK_ITERATIONS
 if (CALLBACK_ITERATIONS !== undefined &&
     (!Number.isInteger(CALLBACK_ITERATIONS) || CALLBACK_ITERATIONS < 1)) {
     throw new Error(`ARK_LIFECYCLE_CALLBACK_ITERATIONS must be a positive integer: ${process.env.ARK_LIFECYCLE_CALLBACK_ITERATIONS}`);
+}
+const LIFECYCLE_MODEL = (process.env.ARK_LIFECYCLE_MODEL ?? 'flat') as LifecycleModelMode;
+if (!['flat', 'hierarchical'].includes(LIFECYCLE_MODEL)) {
+    throw new Error(`ARK_LIFECYCLE_MODEL must be flat or hierarchical: ${LIFECYCLE_MODEL}`);
 }
 
 function loadOracle(): NullPointerOracle {
@@ -269,8 +274,11 @@ describe.sequential('ArkDefectBench null-pointer conformance', () => {
         oracleItem => {
             const casePath = getCasePath(oracleItem);
             const scene = buildScene(casePath);
-            const result = new NullnessAnalysisRunner(scene, CALLBACK_ITERATIONS === undefined ? {} : {
-                lifecycle: { bounds: { maxCallbackIterations: CALLBACK_ITERATIONS } },
+            const result = new NullnessAnalysisRunner(scene, {
+                lifecycleModel: LIFECYCLE_MODEL,
+                ...(CALLBACK_ITERATIONS === undefined ? {} : {
+                    lifecycle: { bounds: { maxCallbackIterations: CALLBACK_ITERATIONS } },
+                }),
             }).runFromDummyMain();
 
             expect(result.success, result.error).toBe(true);
@@ -285,7 +293,7 @@ describe.sequential('ArkDefectBench null-pointer conformance', () => {
             }] : [];
 
             const counts = calculateConfusionCounts(expectedDiagnostics, actualDiagnostics);
-            const metrics = { id: oracleItem.id, ...counts };
+            const metrics = { id: oracleItem.id, lifecycleModel: LIFECYCLE_MODEL, ...counts };
             if (process.env.ARK_NPD_METRICS_FILE) {
                 fs.appendFileSync(
                     process.env.ARK_NPD_METRICS_FILE,

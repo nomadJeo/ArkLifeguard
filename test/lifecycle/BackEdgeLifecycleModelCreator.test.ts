@@ -88,4 +88,20 @@ describe('interchangeable lifecycle model entry', () => {
         const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
         expect(hasCycle(blocks)).toBe(false);
     });
+
+    it('keeps the hierarchical model cyclic for unbounded legal repetition', () => {
+        const creator = createLifecycleModelCreator(
+            buildLifecycleScene('simple'),
+            'hierarchical'
+        );
+        creator.create();
+
+        const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
+        expect(hasCycle(blocks)).toBe(true);
+        expect(blocks.flatMap(invokedNames)).toEqual(expect.arrayContaining([
+            'onForeground',
+            'onBackground',
+            'handleClick',
+        ]));
+    });
 });

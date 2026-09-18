@@ -127,13 +127,16 @@ npm run test:nullness:bench
 
 # 只运行一个用例；支持完整 id 或末尾用例名
 npm run test:nullness:bench -- --case DirectNull
+
+# 使用 M1 Hierarchical 生命周期模型运行全部用例
+npm run test:nullness:bench -- --model hierarchical
 ```
 
 Bench 用于衡量已有标注上的诊断精度，不生成持久化报告。存在 FP、FN、超时或执行错误时命令返回非零状态。`--` 用于把后面的参数传递给测试脚本。
 
 ### 生命周期建模 Bench
 
-`test:lifecycle:benchmark` 使用 `ArkDefectBench/Lifecycle Modeling/lifecycle_model_expected.json` 比较生命周期模型保留或删除的路径。当前只执行 M0 Flat；M1、M2 的预期作为后续实现的验收契约。
+`test:lifecycle:benchmark` 使用 `ArkDefectBench/Lifecycle Modeling/lifecycle_model_expected.json` 比较生命周期模型保留或删除的路径。当前执行 M0 Flat 和 M1 Hierarchical；M2 的预期作为后续实现的验收契约。
 
 ```bash
 npm run test:lifecycle:benchmark

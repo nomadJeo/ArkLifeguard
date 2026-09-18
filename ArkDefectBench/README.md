@@ -98,4 +98,4 @@ npm run test:nullness:bench -- --case Lifecycle.Component.StateReset
 npm run test:lifecycle:benchmark
 ```
 
-目前只实现并执行 M0。M1、M2 的字段是后续实现的验收契约。
+目前执行 M0 和 M1。M2 字段是后续实现的验收契约。

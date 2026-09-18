@@ -30,7 +30,7 @@ const result: ProjectAnalysisResult = {
             maxPropagationDepth: 40,
         },
         boundEnforcement: {
-            maxCallbackIterations: 'inactive-with-flat-model',
+            maxCallbackIterations: 'inactive-with-cyclic-model',
             maxAbilitiesPerFlow: 'enforced',
             maxNavigationHops: 'enforced',
             maxAccessPathLength: 'enforced',

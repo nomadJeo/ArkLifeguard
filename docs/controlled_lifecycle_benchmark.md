@@ -8,7 +8,7 @@
 - **M1 Hierarchical**：增加 Ability、Page、Component 等生命周期作用域；
 - **M2 Hierarchical + Local FSM**：在 M1 上继续限制同一作用域内的回调顺序。
 
-当前只实现了 M0。M1、M2 的预期写进 oracle，是以后实现这两个模型时必须通过的验收条件，不表示它们已经运行。
+当前已经实现并运行 M0、M1。M2 的预期写进 oracle，是以后实现 M2 时必须通过的验收条件，不表示 M2 已经运行。
 
 实际运行结果单独记录在 [controlled_lifecycle_benchmark_results.md](controlled_lifecycle_benchmark_results.md)。
 
@@ -95,14 +95,15 @@ npm run test:lifecycle:benchmark
 
 这条命令只运行 controlled lifecycle benchmark，不运行完整测试套件、全量构建、真实应用实验或耗时基准。
 
-当前测试执行两项检查：
+当前测试执行三项检查：
 
 1. 验证 oracle 的 M0 → M1 → M2 递进关系没有写反；
 2. 用当前 M0 Flat 运行 12 个观察项，并与 oracle 的 `flat` 列比较。
+3. 用当前 M1 Hierarchical 运行同样的 12 个观察项，并与 oracle 的 `hierarchical` 列比较。
 
 ## 7. 实现 M1、M2 后怎样复用
 
-实现新模型后，让同一批项目依次使用 `flat`、`hierarchical`、`hierarchical-state`，保持 Scene、调用图、空指针分析和 IFDS 配置不变。验收条件是：
+实现 M2 后，让同一批项目继续使用 `hierarchical-state`，并与已经运行的 `flat`、`hierarchical` 结果比较。Scene、调用图、空指针分析和 IFDS 配置必须保持不变。验收条件是：
 
 1. 8 个 M0 case 在三个模型中都正确；
 2. 2 个 M1 case 从 M1 开始删除；
