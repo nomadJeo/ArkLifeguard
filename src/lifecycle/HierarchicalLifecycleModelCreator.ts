@@ -23,6 +23,7 @@ import { LifecycleModelCreator } from "./LifecycleModelCreator";
 import {
   AbilityLifecycleMethodStage,
   AbilityLifecycleStage,
+  AbilityInfo,
   ComponentInfo,
   ComponentLifecycleStage,
 } from "./LifecycleTypes";
@@ -82,51 +83,89 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     let abilityTails: BasicBlock[] = [abilityHead];
     let branchIndex = 0;
 
-    // A foreground scope is present even in component-only fixtures. When an
-    // Ability exists, entering it invokes onForeground before Page/UI work.
-    const foreground = this.createBranch(
-      cfg,
-      abilityTails,
-      countLocal,
-      branchIndex++,
-    );
-    this.addAbilityStage(
-      foreground.invokeBlock,
-      AbilityLifecycleStage.FOREGROUND,
-    );
-    abilityTails = [foreground.ifBlock];
-    const pageHead = this.buildPageScope(
-      cfg,
-      foreground.invokeBlock,
-      countLocal,
-      branchIndex,
-    );
-    branchIndex += this.pageBranchCount();
-    this.linkBlocks(pageHead, abilityHead);
+    const ownedComponentSignatures = new Set<string>();
+    for (const ability of this.abilities) {
+      const components = this.uniqueComponents(ability.components);
+      for (const component of components) {
+        ownedComponentSignatures.add(component.signature.toString());
+      }
 
-    // Background exits the visible hierarchy. A subsequent UI event must
-    // re-enter through onForeground and onPageShow.
-    const background = this.createBranch(
-      cfg,
-      abilityTails,
-      countLocal,
-      branchIndex++,
-    );
-    this.addAbilityStage(
-      background.invokeBlock,
-      AbilityLifecycleStage.BACKGROUND,
-    );
-    this.linkBlocks(background.invokeBlock, abilityHead);
-    abilityTails = [background.ifBlock];
-
-    for (const [instance, method] of this.otherAbilityMethods()) {
-      abilityTails = this.addMethodBranch(
+      // Each foreground branch owns one Ability and only that Ability's pages.
+      // This is the M1 ownership boundary used by the nested Page/UI scopes.
+      const foreground = this.createBranch(
         cfg,
         abilityTails,
         countLocal,
         branchIndex++,
-        [[instance, method]],
       );
+      this.addAbilityStageFor(
+        foreground.invokeBlock,
+        ability,
+        AbilityLifecycleStage.FOREGROUND,
+      );
+      abilityTails = [foreground.ifBlock];
+      if (components.length > 0) {
+        const pageHead = this.buildPageScope(
+          cfg,
+          foreground.invokeBlock,
+          countLocal,
+          branchIndex,
+          components,
+        );
+        branchIndex += this.pageBranchCount(components);
+        this.linkBlocks(pageHead, abilityHead);
+      } else {
+        this.linkBlocks(foreground.invokeBlock, abilityHead);
+      }
+
+      const background = this.createBranch(
+        cfg,
+        abilityTails,
+        countLocal,
+        branchIndex++,
+      );
+      this.addAbilityStageFor(
+        background.invokeBlock,
+        ability,
+        AbilityLifecycleStage.BACKGROUND,
+      );
+      this.linkBlocks(background.invokeBlock, abilityHead);
+      abilityTails = [background.ifBlock];
+
+      for (const [instance, method] of this.otherAbilityMethods(ability)) {
+        abilityTails = this.addMethodBranch(
+          cfg,
+          abilityTails,
+          countLocal,
+          branchIndex++,
+          [[instance, method]],
+        );
+      }
+    }
+
+    // Components whose loadContent owner cannot be resolved stay reachable in
+    // a conservative standalone page scope instead of being assigned to every
+    // Ability.
+    const orphanComponents = this.uniqueComponents().filter(component =>
+      !ownedComponentSignatures.has(component.signature.toString())
+    );
+    if (orphanComponents.length > 0) {
+      const standalone = this.createBranch(
+        cfg,
+        abilityTails,
+        countLocal,
+        branchIndex++,
+      );
+      abilityTails = [standalone.ifBlock];
+      const pageHead = this.buildPageScope(
+        cfg,
+        standalone.invokeBlock,
+        countLocal,
+        branchIndex,
+        orphanComponents,
+      );
+      branchIndex += this.pageBranchCount(orphanComponents);
+      this.linkBlocks(pageHead, abilityHead);
     }
     for (const block of abilityTails) {
       this.linkBlocks(block, abilityHead);
@@ -153,6 +192,7 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     predecessor: BasicBlock,
     countLocal: Local,
     firstBranchIndex: number,
+    components: readonly ComponentInfo[],
   ): BasicBlock {
     const pageHead = this.createLoopHead(cfg, predecessor);
     let pageTails: BasicBlock[] = [pageHead];
@@ -169,6 +209,7 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     this.addComponentStage(
       visible.invokeBlock,
       ComponentLifecycleStage.PAGE_SHOW,
+      components,
     );
     pageTails = [visible.ifBlock];
     const eventHead = this.buildVisibleEventScope(
@@ -176,8 +217,9 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
       visible.invokeBlock,
       countLocal,
       branchIndex,
+      components,
     );
-    branchIndex += this.uiCallbackCount();
+    branchIndex += this.uiCallbackCount(components);
     this.linkBlocks(eventHead, pageHead);
 
     // Hiding a page returns to the Page scope. UI events are reachable only by
@@ -188,11 +230,15 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
       countLocal,
       branchIndex++,
     );
-    this.addComponentStage(hide.invokeBlock, ComponentLifecycleStage.PAGE_HIDE);
+    this.addComponentStage(
+      hide.invokeBlock,
+      ComponentLifecycleStage.PAGE_HIDE,
+      components,
+    );
     this.linkBlocks(hide.invokeBlock, pageHead);
     pageTails = [hide.ifBlock];
 
-    for (const component of this.uniqueComponents()) {
+    for (const component of components) {
       const instance = this.getOrCreateClassInstance(component.arkClass);
       for (const stage of COMPONENT_PAGE_SCOPE_STAGES) {
         const method = component.lifecycleMethods.get(stage);
@@ -237,13 +283,14 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     predecessor: BasicBlock,
     countLocal: Local,
     firstBranchIndex: number,
+    components: readonly ComponentInfo[],
   ): BasicBlock {
     const eventHead = this.createLoopHead(cfg, predecessor);
     let eventTails: BasicBlock[] = [eventHead];
     let branchIndex = firstBranchIndex;
 
     if (this.config.enableFineGrainedUICallbacks) {
-      for (const component of this.uniqueComponents()) {
+      for (const component of components) {
         const instance = this.getOrCreateClassInstance(component.arkClass);
         for (const callback of component.uiCallbacks) {
           const branch = this.createBranch(
@@ -291,6 +338,21 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     }
   }
 
+  private addAbilityStageFor(
+    block: BasicBlock,
+    ability: AbilityInfo,
+    stage: AbilityLifecycleMethodStage,
+  ): void {
+    const method = ability.lifecycleMethods.get(stage);
+    if (method) {
+      this.addMethodInvocation(
+        block,
+        this.getOrCreateClassInstance(ability.arkClass),
+        method,
+      );
+    }
+  }
+
   private addAbilityStages(
     block: BasicBlock,
     stages: ReadonlySet<AbilityLifecycleMethodStage>,
@@ -303,8 +365,9 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
   private addComponentStage(
     block: BasicBlock,
     stage: ComponentLifecycleStage,
+    components: readonly ComponentInfo[] = this.uniqueComponents(),
   ): void {
-    for (const component of this.uniqueComponents()) {
+    for (const component of components) {
       const method = component.lifecycleMethods.get(stage);
       if (method) {
         this.addMethodInvocation(
@@ -316,23 +379,21 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     }
   }
 
-  private otherAbilityMethods(): Array<[Local, ArkMethod]> {
+  private otherAbilityMethods(ability: AbilityInfo): Array<[Local, ArkMethod]> {
     const result: Array<[Local, ArkMethod]> = [];
     const emitted = new Set<string>();
-    for (const ability of this.abilities) {
-      const instance = this.getOrCreateClassInstance(ability.arkClass);
-      for (const stage of this.config.lifecycleOrder) {
-        if (ABILITY_START_STAGES.has(stage) || ABILITY_END_STAGES.has(stage) ||
-          stage === AbilityLifecycleStage.FOREGROUND ||
-          stage === AbilityLifecycleStage.BACKGROUND) {
-          continue;
-        }
-        const method = ability.lifecycleMethods.get(stage);
-        const signature = method?.getSignature().toString();
-        if (!method || !signature || emitted.has(signature)) continue;
-        emitted.add(signature);
-        result.push([instance, method]);
+    const instance = this.getOrCreateClassInstance(ability.arkClass);
+    for (const stage of this.config.lifecycleOrder) {
+      if (ABILITY_START_STAGES.has(stage) || ABILITY_END_STAGES.has(stage) ||
+        stage === AbilityLifecycleStage.FOREGROUND ||
+        stage === AbilityLifecycleStage.BACKGROUND) {
+        continue;
       }
+      const method = ability.lifecycleMethods.get(stage);
+      const signature = method?.getSignature().toString();
+      if (!method || !signature || emitted.has(signature)) continue;
+      emitted.add(signature);
+      result.push([instance, method]);
     }
     return result;
   }
@@ -399,9 +460,9 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     return block;
   }
 
-  private pageBranchCount(): number {
-    let count = 2 + this.uiCallbackCount();
-    for (const component of this.uniqueComponents()) {
+  private pageBranchCount(components: readonly ComponentInfo[]): number {
+    let count = 2 + this.uiCallbackCount(components);
+    for (const component of components) {
       count += COMPONENT_PAGE_SCOPE_STAGES.filter(stage =>
         component.lifecycleMethods.has(stage)
       ).length;
@@ -413,17 +474,21 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     return count;
   }
 
-  private uiCallbackCount(): number {
+  private uiCallbackCount(
+    components: readonly ComponentInfo[] = this.uniqueComponents(),
+  ): number {
     if (!this.config.enableFineGrainedUICallbacks) return 0;
-    return this.uniqueComponents().reduce(
+    return components.reduce(
       (sum, component) => sum + component.uiCallbacks.length,
       0,
     );
   }
 
-  private uniqueComponents(): ComponentInfo[] {
+  private uniqueComponents(
+    components: readonly ComponentInfo[] = this.components,
+  ): ComponentInfo[] {
     const seen = new Set<string>();
-    return this.components.filter(component => {
+    return components.filter(component => {
       const signature = component.signature.toString();
       if (seen.has(signature)) return false;
       seen.add(signature);

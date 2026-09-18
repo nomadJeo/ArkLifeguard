@@ -13,4 +13,8 @@ export default class EntryAbility extends UIAbility {
             }
         });
     }
+
+    onForeground(): void {
+        console.info('EntryAbility foreground');
+    }
 }

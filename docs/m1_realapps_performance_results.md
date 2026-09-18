@@ -84,3 +84,38 @@ M1 的唯一边和主要传播计数没有下降，反而增加约 0.07%–0.21%
 这轮无生命周期 K-bound 的 48 项目配对实验没有观察到 M1 的可归因性能提升。IFDS solve 时间表面下降 0.27%，但传播工作量略有增加，且不受模型影响的 Scene 阶段也出现 0.24% 的同向波动。更稳妥的结论是：当前 M1 与 M0 的分析时间基本相同，变化在单轮测量噪声范围内。
 
 本实验也没有真实应用 ground truth，因此“诊断集合相同”只说明 M1 没有改变这批资源分析报告，不能推出真实精度相同。M1 的精度收益仍由 controlled benchmark 中排除跨层非法路径的结果支持。
+
+## 7. Ability owner 优化后的空指针分析补充实验
+
+本轮在 M1 中加入明确的 `Ability → Component → UI callback` 归属：能够从
+`loadContent` 解析 owner 的页面只进入所属 Ability 的 Page/UI scope；无法解析
+owner 的组件保留在独立的保守 scope 中。`AbilityCollector` 同时复用同一批
+`ComponentInfo`，避免 owner 关联对象与后来填充 UI callback 的对象分离。
+
+项目由旧的 48 项空指针报告按 `analysisTimeMs` 排序选出前 5。根据运行时指令，
+KeePassHO 在本轮配对中被跳过，最终比较其余 4 项。两组均为单轮冷进程，使用
+`maxAccessPathLength=5`、`maxPropagationDepth=40`，未设置生命周期 K-bound。
+
+| 项目 | M0 IFDS | M1 IFDS | M1 相对变化 | M0/M1 诊断数 |
+| --- | ---: | ---: | ---: | ---: |
+| CoolMallArkTS | 9.456 s | 10.024 s | +6.01% | 0 / 0 |
+| harmony-utils | 15.038 s | 15.181 s | +0.95% | 2 / 2 |
+| JellyFin_HarmonyOS | 1.696 s | 1.757 s | +3.60% | 4 / 4 |
+| jingmo-for-HarmonyOS | 7.852 s | 8.039 s | +2.38% | 0 / 0 |
+| **合计** | **34.042 s** | **35.001 s** | **+2.82%** | **6 / 6** |
+
+M0/M1 的空指针诊断集合逐项目按内容规范化后完全相同。M1 的
+`processedEdges` 从 1,833,560 增至 1,844,176（+0.58%），`reachedFacts`
+从 1,744,665 增至 1,755,281（+0.61%），空指针分析整体时间从 47.054 s
+增至 48.599 s（+3.28%）。四个项目的 IFDS 时间都没有下降。
+
+这说明 owner 约束在 CFG 语义上已经生效，但没有自动减少 IFDS 状态空间。
+原因是当前 M1 为每个 Ability 建立独立的分支和循环节点，同时未知 owner 的组件
+仍需保守保留；若真实项目多数只有一个已识别 Ability，或空指针事实没有跨
+Ability 共享，删除跨 Ability 直接转移带来的收益很小，新增 CFG 节点反而会产生
+少量额外 path edge。本轮只有一次配对，2.82% 时间差不能作为稳定回归结论；
+传播计数同向增加则足以说明当前实现没有取得预期的 solver 工作量削减。
+
+原始报告为 `out/nullness-realapps-top5-m0.json` 和
+`out/nullness-realapps-top4-m1.json`。前者保留了被跳过的 KeePassHO 失败记录，
+汇总比较只使用两份报告中共同成功的 4 个项目。

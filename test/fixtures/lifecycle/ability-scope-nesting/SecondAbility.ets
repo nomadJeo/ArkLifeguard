@@ -13,4 +13,8 @@ export default class SecondAbility extends UIAbility {
             }
         });
     }
+
+    onForeground(): void {
+        console.info('SecondAbility foreground');
+    }
 }

@@ -37,6 +37,7 @@ import {
 } from './NullnessProblem';
 import { NullnessSolver } from './NullnessSolver';
 import { NullnessLibraryRegistry } from './library/NullnessLibraryRegistry';
+import type { IFDSSolverStatistics } from '../../ifds';
 
 export interface NullnessRunnerConfig {
     lifecycleModel?: LifecycleModelMode;
@@ -49,6 +50,8 @@ export interface NullnessRunnerConfig {
     analyzeModuleInitializers?: boolean;
     /** Analyze project methods containing registered framework argument sinks. */
     analyzeFrameworkSinkMethods?: boolean;
+    /** Collect and aggregate IFDS statistics across the lifecycle and supplemental roots. */
+    collectSolverStatistics?: boolean;
 }
 
 export interface NullnessAnalysisResult {
@@ -56,6 +59,7 @@ export interface NullnessAnalysisResult {
     entryMethod: string;
     diagnostics: readonly NullDereferenceDiagnostic[];
     reachedFacts: Map<Stmt, NullnessFact[]>;
+    solverStatistics?: Readonly<IFDSSolverStatistics>;
     error?: string;
 }
 
@@ -152,8 +156,13 @@ export class NullnessAnalysisRunner {
             // last root finishes, which makes large projects peak at the sum of
             // all root-state spaces. Sequential roots preserve the same union of
             // diagnostics/reached facts while allowing contextual edges to die.
-            const solver = new NullnessSolver(problem, this.scene);
+            const collectedStatistics: IFDSSolverStatistics[] = [];
+            const solver = new NullnessSolver(problem, this.scene, [], {
+                collectStatistics: this.config.collectSolverStatistics,
+            });
             solver.solve();
+            const mainStatistics = solver.getStatistics();
+            if (mainStatistics) collectedStatistics.push({ ...mainStatistics });
             const diagnostics = [...problem.getNullDereferences()];
             const reachedFacts = solver.getReachedFacts();
             for (const method of supplementalRoots) {
@@ -169,9 +178,15 @@ export class NullnessAnalysisRunner {
                 );
                 const supplementalSolver = new NullnessSolver(
                     supplementalProblem,
-                    this.scene
+                    this.scene,
+                    [],
+                    { collectStatistics: this.config.collectSolverStatistics }
                 );
                 supplementalSolver.solve();
+                const supplementalStatistics = supplementalSolver.getStatistics();
+                if (supplementalStatistics) {
+                    collectedStatistics.push({ ...supplementalStatistics });
+                }
                 this.mergeDiagnostics(
                     diagnostics,
                     supplementalProblem.getNullDereferences()
@@ -186,6 +201,7 @@ export class NullnessAnalysisRunner {
                 entryMethod: dummyMain.getSignature().toString(),
                 diagnostics,
                 reachedFacts,
+                solverStatistics: this.aggregateSolverStatistics(collectedStatistics),
             };
         } catch (error) {
             return this.analysisFailure(error);
@@ -207,6 +223,48 @@ export class NullnessAnalysisRunner {
             reachedFacts: new Map(),
             error,
         };
+    }
+
+    private aggregateSolverStatistics(
+        statistics: readonly IFDSSolverStatistics[]
+    ): IFDSSolverStatistics | undefined {
+        if (statistics.length === 0) return undefined;
+        const sums: Array<keyof IFDSSolverStatistics> = [
+            'solveTimeMs',
+            'propagationAttempts',
+            'deferredPropagationAttempts',
+            'uniqueEdgesEnqueued',
+            'duplicateEdgesSkipped',
+            'deferredDuplicateEdgesSkipped',
+            'deduplicationLookups',
+            'deduplicationCandidateChecks',
+            'factEqualityChecks',
+            'processedEdges',
+            'immediateEnqueued',
+            'deferredEnqueued',
+            'finalLaterEdgesSize',
+            'finalPathEdgeCount',
+        ];
+        const maxima: Array<keyof IFDSSolverStatistics> = [
+            'maxDeduplicationCandidates',
+            'maxImmediateQueueSize',
+            'maxDeferredQueueSize',
+            'maxCombinedQueueSize',
+            'maxLaterEdgesSize',
+        ];
+        const result = { ...statistics[0] };
+        for (const key of sums) {
+            (result[key] as number) = statistics.reduce(
+                (total, item) => total + (item[key] as number),
+                0
+            );
+        }
+        for (const key of maxima) {
+            (result[key] as number) = Math.max(
+                ...statistics.map(item => item[key] as number)
+            );
+        }
+        return result;
     }
 
     /**

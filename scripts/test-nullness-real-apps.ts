@@ -7,7 +7,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import type { Sdk } from '../src/adapter/arkanalyzer';
 import { Scene, SceneConfig } from '../src/adapter/arkanalyzer';
-import { DEFAULT_LIFECYCLE_CONFIG } from '../src/lifecycle';
+import type { LifecycleModelMode } from '../src/lifecycle';
+import type { IFDSSolverStatistics } from '../src/ifds';
 import { NullnessAnalysisRunner } from '../src/analysis/nullness/NullnessAnalysisRunner';
 
 type ProjectStatus = 'success' | 'failed' | 'timeout';
@@ -29,7 +30,8 @@ interface Options {
     projects: string[];
     outputPath?: string;
     timeoutMs: number;
-    callbackIterations: number;
+    lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
+    collectSolverStatistics: boolean;
     maxAccessPathLength: number;
     maxPropagationDepth: number;
     limit?: number;
@@ -65,19 +67,21 @@ interface ProjectResult {
     reachedFacts: number;
     totalTimeMs: number;
     analysisTimeMs: number;
+    solverStatistics?: Readonly<IFDSSolverStatistics>;
     peakRssMB: number | null;
     diagnostics: DiagnosticRecord[];
 }
 
 interface RealAppsReport {
-    schemaVersion: 1;
+    schemaVersion: 2;
     analysisKind: 'null-dereference';
     updatedAt: string;
     completed: boolean;
     settings: {
         sdkRoot: string;
         timeoutMs: number;
-        callbackIterations: number;
+        lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
+        collectSolverStatistics: boolean;
         maxAccessPathLength: number;
         maxPropagationDepth: number;
     };
@@ -91,6 +95,8 @@ interface RealAppsReport {
         diagnosticCount: number;
         averageTotalTimeMs: number;
         averageNullnessAnalysisTimeMs: number;
+        totalIFDSSolveTimeMs: number;
+        averageIFDSSolveTimeMs: number;
         averagePeakRssMB: number;
         maxPeakRssMB: number;
     };
@@ -118,7 +124,8 @@ function help(): void {
         '  --real-apps-root <path>   HarmonyRealApps directory containing meta.json',
         '  --sdk-root <path>         SDK root containing openharmony/ets and hms/ets',
         '  --timeout-ms <n>          Per-project timeout; default: 600000',
-        '  --callback-iterations <n> Lifecycle callback expansion rounds; default: 1',
+        '  --lifecycle-model <mode>  flat or hierarchical; default: flat',
+        '  --ifds-stats              Collect IFDS solver time and counters',
         '  --max-access-path-length <n> Maximum tracked field depth; default: 5',
         '  --max-propagation-depth <n> Maximum fact propagation depth; default: 40',
         '  --list                    List projects from meta.json without analyzing',
@@ -156,7 +163,8 @@ function parseArgs(args: string[]): Options {
     const projects: string[] = [];
     let outputPath: string | undefined;
     let timeoutMs = 600_000;
-    let callbackIterations = 1;
+    let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'> = 'flat';
+    let collectSolverStatistics = false;
     let maxAccessPathLength = 5;
     // Real projects can contain recursive framework/task call chains. A bound of
     // 40 retained the same AnimeZ diagnostics as 60 while avoiding context blow-up.
@@ -226,16 +234,25 @@ function parseArgs(args: string[]): Options {
             timeoutMs = parsePositiveInteger(arg.slice('--timeout-ms='.length), '--timeout-ms');
             continue;
         }
-        if (arg === '--callback-iterations') {
-            callbackIterations = parsePositiveInteger(optionValue(args, index, arg), arg);
+        if (arg === '--lifecycle-model') {
+            const value = optionValue(args, index, arg);
+            if (value !== 'flat' && value !== 'hierarchical') {
+                throw new Error(`${arg} must be flat or hierarchical: ${value}`);
+            }
+            lifecycleModel = value;
             index++;
             continue;
         }
-        if (arg.startsWith('--callback-iterations=')) {
-            callbackIterations = parsePositiveInteger(
-                arg.slice('--callback-iterations='.length),
-                '--callback-iterations'
-            );
+        if (arg.startsWith('--lifecycle-model=')) {
+            const value = arg.slice('--lifecycle-model='.length);
+            if (value !== 'flat' && value !== 'hierarchical') {
+                throw new Error(`--lifecycle-model must be flat or hierarchical: ${value}`);
+            }
+            lifecycleModel = value;
+            continue;
+        }
+        if (arg === '--ifds-stats') {
+            collectSolverStatistics = true;
             continue;
         }
         if (arg === '--max-access-path-length') {
@@ -287,7 +304,8 @@ function parseArgs(args: string[]): Options {
         projects,
         outputPath,
         timeoutMs,
-        callbackIterations,
+        lifecycleModel,
+        collectSolverStatistics,
         maxAccessPathLength,
         maxPropagationDepth,
         limit,
@@ -393,15 +411,11 @@ function analyzeProject(
 
         const analysisStart = Date.now();
         const result = new NullnessAnalysisRunner(scene, {
+            lifecycleModel: options.lifecycleModel,
+            collectSolverStatistics: options.collectSolverStatistics,
             problem: {
                 maxAccessPathLength: options.maxAccessPathLength,
                 maxPropagationDepth: options.maxPropagationDepth,
-            },
-            lifecycle: {
-                bounds: {
-                    ...DEFAULT_LIFECYCLE_CONFIG.bounds,
-                    maxCallbackIterations: options.callbackIterations,
-                },
             },
         }).runFromDummyMain();
         record.analysisTimeMs = Date.now() - analysisStart;
@@ -416,6 +430,7 @@ function analyzeProject(
         record.reachedStatements = result.reachedFacts.size;
         record.reachedFacts = [...result.reachedFacts.values()]
             .reduce((sum, facts) => sum + facts.length, 0);
+        record.solverStatistics = result.solverStatistics;
         record.diagnostics = result.diagnostics.map(diagnostic => ({
             nullness: diagnostic.nullness,
             accessPath: diagnostic.accessPath.toString(),
@@ -474,6 +489,13 @@ function updateSummary(report: RealAppsReport): void {
         averageNullnessAnalysisTimeMs: average(
             successes.map(project => project.analysisTimeMs)
         ),
+        totalIFDSSolveTimeMs: successes.reduce(
+            (sum, project) => sum + (project.solverStatistics?.solveTimeMs ?? 0),
+            0
+        ),
+        averageIFDSSolveTimeMs: average(
+            successes.map(project => project.solverStatistics?.solveTimeMs ?? 0)
+        ),
         averagePeakRssMB: average(peakRssValues),
         maxPeakRssMB: peakRssValues.length > 0 ? Math.max(...peakRssValues) : 0,
     };
@@ -485,14 +507,15 @@ function createReport(
 ): RealAppsReport {
     const now = new Date().toISOString();
     return {
-        schemaVersion: 1,
+        schemaVersion: 2,
         analysisKind: 'null-dereference',
         updatedAt: now,
         completed: false,
         settings: {
             sdkRoot: options.sdkRoot,
             timeoutMs: options.timeoutMs,
-            callbackIterations: options.callbackIterations,
+            lifecycleModel: options.lifecycleModel,
+            collectSolverStatistics: options.collectSolverStatistics,
             maxAccessPathLength: options.maxAccessPathLength,
             maxPropagationDepth: options.maxPropagationDepth,
         },
@@ -506,6 +529,8 @@ function createReport(
             diagnosticCount: 0,
             averageTotalTimeMs: 0,
             averageNullnessAnalysisTimeMs: 0,
+            totalIFDSSolveTimeMs: 0,
+            averageIFDSSolveTimeMs: 0,
             averagePeakRssMB: 0,
             maxPeakRssMB: 0,
         },
@@ -573,7 +598,8 @@ function runParent(options: Options): void {
     const report = createReport(options, selected);
     console.log(
         `Nullness real-project evaluation: projects=${selected.length}, ` +
-        `sdk=${options.sdkRoot}, timeout=${options.timeoutMs}ms`
+        `model=${options.lifecycleModel}, sdk=${options.sdkRoot}, ` +
+        `timeout=${options.timeoutMs}ms`
     );
 
     selected.forEach((metadataItem, index) => {
@@ -591,9 +617,10 @@ function runParent(options: Options): void {
                 '--worker-result', resultPath,
                 '--real-apps-root', options.realAppsRoot,
                 '--sdk-root', options.sdkRoot,
-                '--callback-iterations', String(options.callbackIterations),
+                '--lifecycle-model', options.lifecycleModel,
                 '--max-access-path-length', String(options.maxAccessPathLength),
                 '--max-propagation-depth', String(options.maxPropagationDepth),
+                ...(options.collectSolverStatistics ? ['--ifds-stats'] : []),
             ],
             {
                 cwd: repositoryRoot,
@@ -634,7 +661,8 @@ function runParent(options: Options): void {
         }
         console.log(
             `  ${record.status.toUpperCase()} diagnostics=${record.diagnosticCount} ` +
-            `time=${record.totalTimeMs}ms analysis=${record.analysisTimeMs}ms`
+            `time=${record.totalTimeMs}ms analysis=${record.analysisTimeMs}ms ` +
+            `ifds=${record.solverStatistics?.solveTimeMs ?? 'n/a'}ms`
         );
         if (record.error) {
             console.log(`  error: ${record.error.split(/\r?\n/)[0]}`);

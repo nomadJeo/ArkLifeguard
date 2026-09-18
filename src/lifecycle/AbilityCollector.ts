@@ -306,6 +306,9 @@ export class AbilityCollector {
      * @returns Ability 信息数组
      */
     public collectAllAbilities(): AbilityInfo[] {
+        if (this.abilityCache.size > 0) {
+            return [...this.abilityCache.values()];
+        }
         const abilities: AbilityInfo[] = [];
         
         // 阶段 1: 遍历 Scene 中的所有类，收集 Ability 基本信息
@@ -337,6 +340,9 @@ export class AbilityCollector {
      * @returns Component 信息数组
      */
     public collectAllComponents(): ComponentInfo[] {
+        if (this.componentCache.size > 0) {
+            return [...this.componentCache.values()];
+        }
         const components: ComponentInfo[] = [];
         
         for (const arkClass of this.scene.getClasses()) {

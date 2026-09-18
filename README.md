@@ -159,6 +159,8 @@ npm run test:resource:real-apps -- --list
 # 单个项目的空指针分析；默认每个项目限时 600 秒
 npm run test:nullness:real-apps -- \
   --project AnimeZ \
+  --lifecycle-model flat \
+  --ifds-stats \
   --timeout-ms 600000 \
   --output out/nullness-real-apps.json
 
@@ -182,13 +184,12 @@ npm run test:resource:real-apps -- \
 | `--output <file>` | 支持 | 支持 | 保存增量 JSON 报告。 |
 | `--timeout-ms <n>` | 默认 600000 | 默认 180000 | 单项目硬超时。 |
 | `--sdk-root <path>` | 支持 | 支持 | 指定 ETS SDK 根目录。 |
-| `--callback-iterations <n>` | 默认 1 | 不适用 | 仅旧的有限展开入口使用；M0/M1 循环模型不消费。 |
 | `--max-access-path-length <n>` | 默认 5 | 不适用 | 空指针访问路径长度上限。 |
 | `--max-abilities-per-flow <n>` | 不适用 | 默认 0（关闭） | 可选的资源流 Ability 上限，不属于 M0/M1。 |
 | `--max-navigation-hops <n>` | 不适用 | 默认 0（关闭） | 可选的资源流导航跳数上限，不属于 M0/M1。 |
 | `--max-propagation-depth <n>` | 默认 40 | 默认 40 | Fact 传播深度上限。 |
-| `--lifecycle-model <mode>` | 不适用 | 默认 `flat` | 选择 `flat` 或 `hierarchical` 生命周期模型。 |
-| `--ifds-stats` | 不适用 | 支持 | 在报告中保存 IFDS 求解时间和传播统计。 |
+| `--lifecycle-model <mode>` | 默认 `flat` | 默认 `flat` | 选择 `flat` 或 `hierarchical` 生命周期模型。 |
+| `--ifds-stats` | 支持 | 支持 | 在报告中保存 IFDS 求解时间和传播统计。 |
 
 真实应用集合的下载、版本固定和 `meta.json` 维护方式见 [HarmonyRealApps/README.md](./HarmonyRealApps/README.md)。完整参数可使用对应命令的 `--help` 查看。
 
