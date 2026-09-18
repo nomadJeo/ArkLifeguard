@@ -347,3 +347,39 @@ npm run test:nullness:real-apps -- \
 
 这仍是单轮配对实验。时间数据可以说明本轮工作量削减与明显的运行时间下降同向，
 但不能提供方差或稳定加速区间。KeePassHO 在 60 秒限制下无法用于模型比较。
+
+## 10. 排除测试 Ability 后的四项目复验
+
+### 10.1 过滤是否只在 M1 生效
+
+不是。Flat 与 M1 都继承 `LifecycleModelCreator`，其 Ability 都由同一
+`AbilityCollector.collectAllAbilities()` 收集；`AbilityCollector` 在收集阶段统一
+排除 `ohosTest` 和 `src/test` 路径下的 Ability。因此，前述 M0 和 M1 实验已经
+使用相同的测试 Ability 过滤。新增的 Flat 专用回归测试确认：普通
+`UnusedAbility` 仍保留，`ohosTest/TestAbility` 不会进入 Flat DummyMain。
+
+### 10.2 配对复验
+
+为排除单轮偶然变化，重新运行 CoolMallArkTS、harmony-utils、
+JellyFin_HarmonyOS 和 jingmo-for-HarmonyOS。两组均使用完整 root 集合、
+`maxAccessPathLength=5`、`maxPropagationDepth=40` 和 `timeout=60000ms`。
+原始报告为 `out/nullness-flat-test-filter-four.json` 与
+`out/nullness-hierarchical-test-filter-four.json`。
+
+| 项目 | M0 IFDS | M1 IFDS | 变化 | M0/M1 blocks | M0/M1 Ability | 诊断集合 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| CoolMallArkTS | 9.667 s | 7.424 s | -23.20% | 415 / 211 | 2 / 1 | 相同 |
+| harmony-utils | 15.767 s | 14.189 s | -10.01% | 1,881 / 946 | 1 / 1 | 相同 |
+| JellyFin_HarmonyOS | 1.864 s | 1.843 s | -1.13% | 91 / 47 | 3 / 2 | 相同 |
+| jingmo-for-HarmonyOS | 8.193 s | 6.565 s | -19.87% | 855 / 433 | 3 / 3 | 相同 |
+| **合计** | **35.491 s** | **30.021 s** | **-15.41%** | **3,242 / 1,633** | **9 / 7** | **相同** |
+
+生命周期 root IFDS 从 26.514 s 降至 21.246 s（-19.87%）；supplemental root
+从 8.977 s 到 8.775 s（-2.25%）。`processedEdges` 从 1,831,793 降至
+1,597,968（-12.76%），而 `factEqualityChecks` 基本持平（1,118,999 →
+1,119,657）。
+
+这个复验排除了“只因 M1 排除了测试 Ability”这一解释：harmony-utils 的 Ability
+数在两组都是 1，M1 仍快 10.01%；jingmo-for-HarmonyOS 的 Ability 数两组都是 3，
+M1 仍快 19.87%。效率收益主要来自 M1 的 compact dispatcher 和更小的 scope CFG；
+可达 Ability 裁剪在 CoolMallArkTS、JellyFin_HarmonyOS 等项目中提供额外收益。

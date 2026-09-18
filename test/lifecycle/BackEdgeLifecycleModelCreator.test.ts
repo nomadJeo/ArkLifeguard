@@ -77,6 +77,21 @@ describe('interchangeable lifecycle model entry', () => {
         expect(hasCycle([...creator.getDummyMain().getCfg()!.getBlocks()])).toBe(true);
     });
 
+    it('excludes test-source abilities from the flat model', () => {
+        const creator = createLifecycleModelCreator(
+            buildLifecycleScene('ability-scope-nesting'),
+            'flat'
+        );
+        creator.create();
+
+        expect(creator.getAbilities().map(ability => ability.name)).toEqual(
+            expect.arrayContaining(['EntryAbility', 'SecondAbility', 'UnusedAbility'])
+        );
+        expect(creator.getAbilities().map(ability => ability.name)).not.toContain(
+            'TestAbility'
+        );
+    });
+
     it('keeps the bounded unroll model selectable for comparison', () => {
         const creator = createLifecycleModelCreator(
             buildLifecycleScene('simple'),
