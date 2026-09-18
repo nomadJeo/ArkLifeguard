@@ -165,6 +165,8 @@ npm run test:nullness:real-apps -- \
 # 前 5 个项目的资源泄漏分析；默认每个项目硬限时 180 秒
 npm run test:resource:real-apps -- \
   --limit 5 \
+  --lifecycle-model hierarchical \
+  --ifds-stats \
   --timeout-ms 180000 \
   --output out/resource-real-apps.json
 ```
@@ -185,6 +187,8 @@ npm run test:resource:real-apps -- \
 | `--max-abilities-per-flow <n>` | 不适用 | 默认 3 | 单条资源流的 Ability 上限。 |
 | `--max-navigation-hops <n>` | 不适用 | 默认 5 | 单条资源流的导航跳数上限。 |
 | `--max-propagation-depth <n>` | 默认 40 | 默认 40 | Fact 传播深度上限。 |
+| `--lifecycle-model <mode>` | 不适用 | 默认 `flat` | 选择 `flat` 或 `hierarchical` 生命周期模型。 |
+| `--ifds-stats` | 不适用 | 支持 | 在报告中保存 IFDS 求解时间和传播统计。 |
 
 真实应用集合的下载、版本固定和 `meta.json` 维护方式见 [HarmonyRealApps/README.md](./HarmonyRealApps/README.md)。完整参数可使用对应命令的 `--help` 查看。
 

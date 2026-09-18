@@ -7,6 +7,7 @@ coverage/
 !/docs/current_lifecycle_model.md
 !/docs/controlled_lifecycle_benchmark.md
 !/docs/controlled_lifecycle_benchmark_results.md
+!/docs/m1_realapps_performance_results.md
 sdk/
 HarmonyRealApps/projects/
 AGENTS.md

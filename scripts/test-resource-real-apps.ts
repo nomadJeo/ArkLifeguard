@@ -17,6 +17,7 @@ import {
     type TaintLeakRecord,
 } from '../src/application/ProjectAnalyzer';
 import type { IFDSSolverStatistics } from '../src/ifds';
+import type { LifecycleModelMode } from '../src/lifecycle';
 
 type ProjectStatus = 'success' | 'failed' | 'timeout';
 
@@ -40,6 +41,7 @@ interface Options {
     maxNavigationHops: number;
     maxPropagationDepth: number;
     collectSolverStatistics: boolean;
+    lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
     limit?: number;
     listOnly: boolean;
     workerProject?: string;
@@ -62,6 +64,8 @@ interface ProjectResult {
     reachedStatements: number;
     reachedFacts: number;
     totalTimeMs: number;
+    sceneBuildingTimeMs: number;
+    lifecycleModelingTimeMs: number;
     resourceAnalysisTimeMs: number;
     peakRssMB: number | null;
     solverStatistics?: Readonly<IFDSSolverStatistics>;
@@ -83,6 +87,7 @@ interface RealAppsReport {
         maxNavigationHops: number;
         maxPropagationDepth: number;
         collectSolverStatistics: boolean;
+        lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
     };
     summary: {
         selectedProjects: number;
@@ -95,6 +100,8 @@ interface RealAppsReport {
         taintLeakCount: number;
         methodLocalLeakCount: number;
         averageTotalTimeMs: number;
+        averageSceneBuildingTimeMs: number;
+        averageLifecycleModelingTimeMs: number;
         averageResourceAnalysisTimeMs: number;
         averagePeakRssMB: number;
         maxPeakRssMB: number;
@@ -141,6 +148,7 @@ function help(): void {
         '  --max-navigation-hops <n>   Navigation bound for one resource flow; default: 5',
         '  --max-propagation-depth <n> Resource fact propagation bound; default: 40',
         '  --ifds-stats                Collect aggregate IFDS solver statistics',
+        '  --lifecycle-model <mode>    flat or hierarchical; default: flat',
         '  --list                      List projects without analyzing',
         '  -h, --help                  Show this help',
         '',
@@ -183,6 +191,7 @@ function parseArgs(args: string[]): Options {
     let maxNavigationHops = 5;
     let maxPropagationDepth = 40;
     let collectSolverStatistics = false;
+    let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'> = 'flat';
     let limit: number | undefined;
     let listOnly = false;
     let workerProject: string | undefined;
@@ -248,6 +257,18 @@ function parseArgs(args: string[]): Options {
             );
         } else if (arg === '--ifds-stats') {
             collectSolverStatistics = true;
+        } else if (arg === '--lifecycle-model') {
+            const value = consume(arg);
+            if (value !== 'flat' && value !== 'hierarchical') {
+                throw new Error(`${arg} must be flat or hierarchical: ${value}`);
+            }
+            lifecycleModel = value;
+        } else if (arg.startsWith('--lifecycle-model=')) {
+            const value = arg.slice('--lifecycle-model='.length);
+            if (value !== 'flat' && value !== 'hierarchical') {
+                throw new Error(`--lifecycle-model must be flat or hierarchical: ${value}`);
+            }
+            lifecycleModel = value;
         } else if (arg === '--list') {
             listOnly = true;
         } else if (arg === '--worker-project') {
@@ -271,6 +292,7 @@ function parseArgs(args: string[]): Options {
         maxNavigationHops,
         maxPropagationDepth,
         collectSolverStatistics,
+        lifecycleModel,
         limit,
         listOnly,
         workerProject,
@@ -319,6 +341,8 @@ function emptyProjectResult(metadata: ProjectMetadata): ProjectResult {
         reachedStatements: 0,
         reachedFacts: 0,
         totalTimeMs: 0,
+        sceneBuildingTimeMs: 0,
+        lifecycleModelingTimeMs: 0,
         resourceAnalysisTimeMs: 0,
         peakRssMB: null,
         resourceLeaks: [],
@@ -337,6 +361,7 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
             runNullness: false,
             runResourceAnalysis: true,
             analyzeNavigation: false,
+            lifecycleModel: options.lifecycleModel,
             maxCallbackIterations: options.callbackIterations,
             maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
             maxNavigationHops: options.maxNavigationHops,
@@ -358,6 +383,8 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
         record.reachedStatements = result.resourceAnalysis.reachedStatements;
         record.reachedFacts = result.resourceAnalysis.reachedFacts;
         record.resourceAnalysisTimeMs = result.duration.resourceAnalysis;
+        record.sceneBuildingTimeMs = result.duration.sceneBuilding;
+        record.lifecycleModelingTimeMs = result.duration.lifecycleModeling;
         record.solverStatistics = result.resourceAnalysis.solverStatistics;
         if (result.status !== 'success' || !result.resourceAnalysis.success) {
             record.error = result.resourceAnalysis.error ??
@@ -393,6 +420,8 @@ function emptySummary(selectedProjects: number): RealAppsReport['summary'] {
         taintLeakCount: 0,
         methodLocalLeakCount: 0,
         averageTotalTimeMs: 0,
+        averageSceneBuildingTimeMs: 0,
+        averageLifecycleModelingTimeMs: 0,
         averageResourceAnalysisTimeMs: 0,
         averagePeakRssMB: 0,
         maxPeakRssMB: 0,
@@ -419,6 +448,12 @@ function updateSummary(report: RealAppsReport): void {
         taintLeakCount: successful.reduce((sum, item) => sum + item.taintLeakCount, 0),
         methodLocalLeakCount: successful.reduce((sum, item) => sum + item.methodLocalLeakCount, 0),
         averageTotalTimeMs: average(successful.map(item => item.totalTimeMs)),
+        averageSceneBuildingTimeMs: average(
+            successful.map(item => item.sceneBuildingTimeMs)
+        ),
+        averageLifecycleModelingTimeMs: average(
+            successful.map(item => item.lifecycleModelingTimeMs)
+        ),
         averageResourceAnalysisTimeMs: average(
             successful.map(item => item.resourceAnalysisTimeMs)
         ),
@@ -497,13 +532,14 @@ async function main(): Promise<void> {
             maxNavigationHops: options.maxNavigationHops,
             maxPropagationDepth: options.maxPropagationDepth,
             collectSolverStatistics: options.collectSolverStatistics,
+            lifecycleModel: options.lifecycleModel,
         },
         summary: emptySummary(selected.length),
         projects: [],
     };
     console.log(
         `Resource real-project evaluation: projects=${selected.length}, ` +
-        `sdk=${options.sdkRoot}, timeout=${options.timeoutMs}ms`
+        `model=${options.lifecycleModel}, sdk=${options.sdkRoot}, timeout=${options.timeoutMs}ms`
     );
 
     selected.forEach((item, index) => {
@@ -522,6 +558,7 @@ async function main(): Promise<void> {
             '--max-abilities-per-flow', String(options.maxAbilitiesPerFlow),
             '--max-navigation-hops', String(options.maxNavigationHops),
             '--max-propagation-depth', String(options.maxPropagationDepth),
+            '--lifecycle-model', options.lifecycleModel,
         ];
         if (options.collectSolverStatistics) childArgs.push('--ifds-stats');
         const child = spawnSync(process.execPath, childArgs, {
@@ -557,7 +594,9 @@ async function main(): Promise<void> {
         console.log(
             `  ${record.status.toUpperCase()} leaks=${record.resourceLeakCount} ` +
             `local=${record.methodLocalLeakCount} time=${record.totalTimeMs}ms ` +
-            `resource=${record.resourceAnalysisTimeMs}ms`
+            `lifecycle=${record.lifecycleModelingTimeMs}ms ` +
+            `resource=${record.resourceAnalysisTimeMs}ms ` +
+            `ifds=${record.solverStatistics?.solveTimeMs ?? 'n/a'}ms`
         );
         if (record.error) console.log(`  error: ${record.error.split(/\r?\n/)[0]}`);
     });
