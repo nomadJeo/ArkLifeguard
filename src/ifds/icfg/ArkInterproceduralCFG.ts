@@ -1,4 +1,4 @@
-import type { ArkInvokeStmt, ArkMethod, Scene, Stmt } from '../../adapter/arkanalyzer';
+import type { ArkMethod, Scene, Stmt } from '../../adapter/arkanalyzer';
 import { CallGraphManager } from './CallGraphManager';
 import { CfgIndex } from './CfgIndex';
 import type { InterproceduralCFG } from './InterproceduralCFG';
@@ -42,11 +42,11 @@ export class ArkInterproceduralCFG implements InterproceduralCFG {
         return this.cfgIndex.isExitStatement(stmt);
     }
 
-    getAllCalleeMethods(call: ArkInvokeStmt): Set<ArkMethod> {
+    getAllCalleeMethods(call: Stmt): Set<ArkMethod> {
         return this.callGraphManager.getAllCalleeMethods(call);
     }
 
-    getCalleesOfCallAt(call: ArkInvokeStmt): Set<ArkMethod> {
+    getCalleesOfCallAt(call: Stmt): Set<ArkMethod> {
         return this.callGraphManager.getCalleesOfCallAt(call);
     }
 

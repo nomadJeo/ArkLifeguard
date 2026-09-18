@@ -14,7 +14,6 @@
  */
 
 import {
-    ArkInvokeStmt,
     ArkMethod,
     Scene,
     Stmt,
@@ -265,7 +264,7 @@ export abstract class DataflowSolver<D> {
         const returnSite = this.icfg.getReturnSiteOfCallAt(callEdgePoint.node);
         const handlers = this.icfg.getExceptionalReturnSitesOfCallAt(callEdgePoint.node);
         if (!returnSite && handlers.length === 0) return;
-        const invokeStmt = callEdgePoint.node as ArkInvokeStmt;
+        const invokeStmt = callEdgePoint.node;
         const callees = this.icfg.getCalleesOfCallAt(invokeStmt);
         for (const callee of callees) {
             const callFlowFunc = this.problem.getCallFlowFunction(invokeStmt, callee);
