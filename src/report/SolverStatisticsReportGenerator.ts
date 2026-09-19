@@ -10,6 +10,7 @@ export interface SolverStatisticsReport {
         enabled: boolean;
         success: boolean;
         statistics: ProjectAnalysisResult['resourceAnalysis']['solverStatistics'] | null;
+        amplification: ProjectAnalysisResult['resourceAnalysis']['amplification'];
     };
 }
 
@@ -24,6 +25,7 @@ export class SolverStatisticsReportGenerator {
                 enabled: result.resourceAnalysis.enabled,
                 success: result.resourceAnalysis.success,
                 statistics: result.resourceAnalysis.solverStatistics ?? null,
+                amplification: result.resourceAnalysis.amplification,
             },
         };
         const content = JSON.stringify(report, null, 2);

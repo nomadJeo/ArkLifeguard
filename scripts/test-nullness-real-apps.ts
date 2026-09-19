@@ -34,7 +34,10 @@ interface Options {
     projects: string[];
     outputPath?: string;
     timeoutMs: number;
-    lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
+    lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'opt-flat' | 'hierarchical'>;
+    compactLifecycleDispatcher: boolean;
+    removeEmptyLifecycleScopes: boolean;
+    pruneUnreachableAbilities: boolean;
     collectSolverStatistics: boolean;
     lifecycleRootOnly: boolean;
     maxAccessPathLength: number;
@@ -87,7 +90,12 @@ interface RealAppsReport {
     settings: {
         sdkRoot: string;
         timeoutMs: number;
-        lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
+        lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'opt-flat' | 'hierarchical'>;
+        lifecycleOptimizations: {
+            compactDispatcher: boolean;
+            removeEmptyScopes: boolean;
+            pruneUnreachableAbilities: boolean;
+        };
         collectSolverStatistics: boolean;
         lifecycleRootOnly: boolean;
         maxAccessPathLength: number;
@@ -135,7 +143,10 @@ function help(): void {
         '  --real-apps-root <path>   HarmonyRealApps directory containing meta.json',
         '  --sdk-root <path>         SDK root containing openharmony/ets and hms/ets',
         '  --timeout-ms <n>          Per-project timeout; default: 600000',
-        '  --lifecycle-model <mode>  flat or hierarchical; default: flat',
+        '  --lifecycle-model <mode>  flat, opt-flat or hierarchical; default: flat',
+        '  --no-compact-dispatcher   M1-NoCompact ablation',
+        '  --no-empty-scope-removal  M1-NoEmpty ablation',
+        '  --no-ability-prune        M1-NoAbilityPrune ablation',
         '  --ifds-stats              Collect IFDS solver time and counters',
         '  --lifecycle-root-only     Disable module-initializer/framework-sink roots',
         '  --max-access-path-length <n> Maximum tracked field depth; default: 5',
@@ -175,7 +186,10 @@ function parseArgs(args: string[]): Options {
     const projects: string[] = [];
     let outputPath: string | undefined;
     let timeoutMs = 600_000;
-    let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'> = 'flat';
+    let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'opt-flat' | 'hierarchical'> = 'flat';
+    let compactLifecycleDispatcher = true;
+    let removeEmptyLifecycleScopes = true;
+    let pruneUnreachableAbilities = true;
     let collectSolverStatistics = false;
     let lifecycleRootOnly = false;
     let maxAccessPathLength = 5;
@@ -249,8 +263,8 @@ function parseArgs(args: string[]): Options {
         }
         if (arg === '--lifecycle-model') {
             const value = optionValue(args, index, arg);
-            if (value !== 'flat' && value !== 'hierarchical') {
-                throw new Error(`${arg} must be flat or hierarchical: ${value}`);
+            if (value !== 'flat' && value !== 'opt-flat' && value !== 'hierarchical') {
+                throw new Error(`${arg} must be flat, opt-flat or hierarchical: ${value}`);
             }
             lifecycleModel = value;
             index++;
@@ -258,14 +272,26 @@ function parseArgs(args: string[]): Options {
         }
         if (arg.startsWith('--lifecycle-model=')) {
             const value = arg.slice('--lifecycle-model='.length);
-            if (value !== 'flat' && value !== 'hierarchical') {
-                throw new Error(`--lifecycle-model must be flat or hierarchical: ${value}`);
+            if (value !== 'flat' && value !== 'opt-flat' && value !== 'hierarchical') {
+                throw new Error(`--lifecycle-model must be flat, opt-flat or hierarchical: ${value}`);
             }
             lifecycleModel = value;
             continue;
         }
         if (arg === '--ifds-stats') {
             collectSolverStatistics = true;
+            continue;
+        }
+        if (arg === '--no-compact-dispatcher') {
+            compactLifecycleDispatcher = false;
+            continue;
+        }
+        if (arg === '--no-empty-scope-removal') {
+            removeEmptyLifecycleScopes = false;
+            continue;
+        }
+        if (arg === '--no-ability-prune') {
+            pruneUnreachableAbilities = false;
             continue;
         }
         if (arg === '--lifecycle-root-only') {
@@ -322,6 +348,9 @@ function parseArgs(args: string[]): Options {
         outputPath,
         timeoutMs,
         lifecycleModel,
+        compactLifecycleDispatcher,
+        removeEmptyLifecycleScopes,
+        pruneUnreachableAbilities,
         collectSolverStatistics,
         lifecycleRootOnly,
         maxAccessPathLength,
@@ -430,6 +459,13 @@ function analyzeProject(
         const analysisStart = Date.now();
         const result = new NullnessAnalysisRunner(scene, {
             lifecycleModel: options.lifecycleModel,
+            lifecycle: {
+                optimizations: {
+                    compactDispatcher: options.compactLifecycleDispatcher,
+                    removeEmptyScopes: options.removeEmptyLifecycleScopes,
+                    pruneUnreachableAbilities: options.pruneUnreachableAbilities,
+                },
+            },
             collectSolverStatistics: options.collectSolverStatistics,
             analyzeModuleInitializers: !options.lifecycleRootOnly,
             analyzeFrameworkSinkMethods: !options.lifecycleRootOnly,
@@ -552,6 +588,11 @@ function createReport(
             sdkRoot: options.sdkRoot,
             timeoutMs: options.timeoutMs,
             lifecycleModel: options.lifecycleModel,
+            lifecycleOptimizations: {
+                compactDispatcher: options.compactLifecycleDispatcher,
+                removeEmptyScopes: options.removeEmptyLifecycleScopes,
+                pruneUnreachableAbilities: options.pruneUnreachableAbilities,
+            },
             collectSolverStatistics: options.collectSolverStatistics,
             lifecycleRootOnly: options.lifecycleRootOnly,
             maxAccessPathLength: options.maxAccessPathLength,
@@ -664,6 +705,12 @@ function runParent(options: Options): void {
                 '--max-propagation-depth', String(options.maxPropagationDepth),
                 ...(options.collectSolverStatistics ? ['--ifds-stats'] : []),
                 ...(options.lifecycleRootOnly ? ['--lifecycle-root-only'] : []),
+                ...(!options.compactLifecycleDispatcher
+                    ? ['--no-compact-dispatcher'] : []),
+                ...(!options.removeEmptyLifecycleScopes
+                    ? ['--no-empty-scope-removal'] : []),
+                ...(!options.pruneUnreachableAbilities
+                    ? ['--no-ability-prune'] : []),
             ],
             {
                 cwd: repositoryRoot,

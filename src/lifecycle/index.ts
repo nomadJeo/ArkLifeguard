@@ -80,6 +80,8 @@ export {
     
     // 配置
     LifecycleModelConfig,
+    LifecycleOptimizationConfig,
+    LifecycleModelStatistics,
     DEFAULT_LIFECYCLE_CONFIG,
 } from './LifecycleTypes';
 
@@ -88,6 +90,7 @@ export { ViewTreeCallbackExtractor, extractUICallbacks } from './ViewTreeCallbac
 export { LifecycleModelCreator } from './LifecycleModelCreator';
 export {
     FlatLifecycleModelCreator,
+    OptimizedFlatLifecycleModelCreator,
     BackEdgeLifecycleModelCreator,
 } from './BackEdgeLifecycleModelCreator';
 export { HierarchicalLifecycleModelCreator } from './HierarchicalLifecycleModelCreator';

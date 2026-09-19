@@ -12,12 +12,15 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
     ProjectAnalyzer,
+    type DummyMainRecord,
+    type LifecycleAmplificationRecord,
     type MethodLocalResourceLeakRecord,
     type ResourceLeakRecord,
     type TaintLeakRecord,
 } from '../src/application/ProjectAnalyzer';
 import type { IFDSSolverStatistics } from '../src/ifds';
 import type { LifecycleModelMode } from '../src/lifecycle';
+import type { LifecycleModelStatistics } from '../src/lifecycle';
 
 type ProjectStatus = 'success' | 'failed' | 'timeout';
 
@@ -40,7 +43,10 @@ interface Options {
     maxNavigationHops: number;
     maxPropagationDepth: number;
     collectSolverStatistics: boolean;
-    lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
+    lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'opt-flat' | 'hierarchical'>;
+    compactLifecycleDispatcher: boolean;
+    removeEmptyLifecycleScopes: boolean;
+    pruneUnreachableAbilities: boolean;
     limit?: number;
     listOnly: boolean;
     workerProject?: string;
@@ -68,6 +74,9 @@ interface ProjectResult {
     resourceAnalysisTimeMs: number;
     peakRssMB: number | null;
     solverStatistics?: Readonly<IFDSSolverStatistics>;
+    lifecycleStatistics?: LifecycleModelStatistics;
+    dummyMain?: DummyMainRecord;
+    amplification?: LifecycleAmplificationRecord;
     resourceLeaks: ResourceLeakRecord[];
     taintLeaks: TaintLeakRecord[];
     methodLocalLeaks: MethodLocalResourceLeakRecord[];
@@ -85,7 +94,12 @@ interface RealAppsReport {
         maxNavigationHops: number;
         maxPropagationDepth: number;
         collectSolverStatistics: boolean;
-        lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'>;
+        lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'opt-flat' | 'hierarchical'>;
+        lifecycleOptimizations: {
+            compactDispatcher: boolean;
+            removeEmptyScopes: boolean;
+            pruneUnreachableAbilities: boolean;
+        };
     };
     summary: {
         selectedProjects: number;
@@ -145,7 +159,10 @@ function help(): void {
         '  --max-navigation-hops <n>   Navigation bound; 0 disables it; default: 0',
         '  --max-propagation-depth <n> Resource fact propagation bound; default: 40',
         '  --ifds-stats                Collect aggregate IFDS solver statistics',
-        '  --lifecycle-model <mode>    flat or hierarchical; default: flat',
+        '  --lifecycle-model <mode>    flat, opt-flat or hierarchical; default: flat',
+        '  --no-compact-dispatcher     M1-NoCompact ablation',
+        '  --no-empty-scope-removal    M1-NoEmpty ablation',
+        '  --no-ability-prune          M1-NoAbilityPrune ablation',
         '  --list                      List projects without analyzing',
         '  -h, --help                  Show this help',
         '',
@@ -187,7 +204,10 @@ function parseArgs(args: string[]): Options {
     let maxNavigationHops = 0;
     let maxPropagationDepth = 40;
     let collectSolverStatistics = false;
-    let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'hierarchical'> = 'flat';
+    let lifecycleModel: Extract<LifecycleModelMode, 'flat' | 'opt-flat' | 'hierarchical'> = 'flat';
+    let compactLifecycleDispatcher = true;
+    let removeEmptyLifecycleScopes = true;
+    let pruneUnreachableAbilities = true;
     let limit: number | undefined;
     let listOnly = false;
     let workerProject: string | undefined;
@@ -249,16 +269,22 @@ function parseArgs(args: string[]): Options {
             collectSolverStatistics = true;
         } else if (arg === '--lifecycle-model') {
             const value = consume(arg);
-            if (value !== 'flat' && value !== 'hierarchical') {
-                throw new Error(`${arg} must be flat or hierarchical: ${value}`);
+            if (value !== 'flat' && value !== 'opt-flat' && value !== 'hierarchical') {
+                throw new Error(`${arg} must be flat, opt-flat or hierarchical: ${value}`);
             }
             lifecycleModel = value;
         } else if (arg.startsWith('--lifecycle-model=')) {
             const value = arg.slice('--lifecycle-model='.length);
-            if (value !== 'flat' && value !== 'hierarchical') {
-                throw new Error(`--lifecycle-model must be flat or hierarchical: ${value}`);
+            if (value !== 'flat' && value !== 'opt-flat' && value !== 'hierarchical') {
+                throw new Error(`--lifecycle-model must be flat, opt-flat or hierarchical: ${value}`);
             }
             lifecycleModel = value;
+        } else if (arg === '--no-compact-dispatcher') {
+            compactLifecycleDispatcher = false;
+        } else if (arg === '--no-empty-scope-removal') {
+            removeEmptyLifecycleScopes = false;
+        } else if (arg === '--no-ability-prune') {
+            pruneUnreachableAbilities = false;
         } else if (arg === '--list') {
             listOnly = true;
         } else if (arg === '--worker-project') {
@@ -282,6 +308,9 @@ function parseArgs(args: string[]): Options {
         maxPropagationDepth,
         collectSolverStatistics,
         lifecycleModel,
+        compactLifecycleDispatcher,
+        removeEmptyLifecycleScopes,
+        pruneUnreachableAbilities,
         limit,
         listOnly,
         workerProject,
@@ -351,6 +380,9 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
             runResourceAnalysis: true,
             analyzeNavigation: false,
             lifecycleModel: options.lifecycleModel,
+            compactLifecycleDispatcher: options.compactLifecycleDispatcher,
+            removeEmptyLifecycleScopes: options.removeEmptyLifecycleScopes,
+            pruneUnreachableAbilities: options.pruneUnreachableAbilities,
             maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
             maxNavigationHops: options.maxNavigationHops,
             maxPropagationDepth: options.maxPropagationDepth,
@@ -374,6 +406,9 @@ async function analyzeProject(metadata: ProjectMetadata, options: Options): Prom
         record.sceneBuildingTimeMs = result.duration.sceneBuilding;
         record.lifecycleModelingTimeMs = result.duration.lifecycleModeling;
         record.solverStatistics = result.resourceAnalysis.solverStatistics;
+        record.lifecycleStatistics = result.lifecycleStatistics;
+        record.dummyMain = result.dummyMain;
+        record.amplification = result.resourceAnalysis.amplification;
         if (result.status !== 'success' || !result.resourceAnalysis.success) {
             record.error = result.resourceAnalysis.error ??
                 (result.errors.join('; ') || 'Resource analysis failed without an error message');
@@ -520,6 +555,11 @@ async function main(): Promise<void> {
             maxPropagationDepth: options.maxPropagationDepth,
             collectSolverStatistics: options.collectSolverStatistics,
             lifecycleModel: options.lifecycleModel,
+            lifecycleOptimizations: {
+                compactDispatcher: options.compactLifecycleDispatcher,
+                removeEmptyScopes: options.removeEmptyLifecycleScopes,
+                pruneUnreachableAbilities: options.pruneUnreachableAbilities,
+            },
         },
         summary: emptySummary(selected.length),
         projects: [],
@@ -546,6 +586,9 @@ async function main(): Promise<void> {
             '--max-propagation-depth', String(options.maxPropagationDepth),
             '--lifecycle-model', options.lifecycleModel,
         ];
+        if (!options.compactLifecycleDispatcher) childArgs.push('--no-compact-dispatcher');
+        if (!options.removeEmptyLifecycleScopes) childArgs.push('--no-empty-scope-removal');
+        if (!options.pruneUnreachableAbilities) childArgs.push('--no-ability-prune');
         if (options.collectSolverStatistics) childArgs.push('--ifds-stats');
         const child = spawnSync(process.execPath, childArgs, {
             cwd: repositoryRoot,

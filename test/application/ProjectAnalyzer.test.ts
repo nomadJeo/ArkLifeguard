@@ -17,10 +17,16 @@ describe('ProjectAnalyzer end-to-end application service', () => {
         expect(result.summary.abilities).toBe(1);
         expect(result.summary.components).toBe(1);
         expect(result.dummyMain.blocks).toBeGreaterThan(0);
+        expect(result.dummyMain.edges).toBeGreaterThan(0);
         expect(result.dummyMain.statements).toBeGreaterThan(0);
         expect(result.nullness.success).toBe(true);
         expect(result.resourceAnalysis.success).toBe(true);
         expect(result.resourceAnalysis.analyzedMethods).toBeGreaterThan(0);
+        expect(result.resourceAnalysis.amplification.reachedStatements)
+            .toBe(result.resourceAnalysis.reachedStatements);
+        expect(result.resourceAnalysis.amplification.factsPerStatement)
+            .toBeGreaterThanOrEqual(0);
+        expect(result.lifecycleStatistics.abilities.collected).toBe(1);
         expect(result.settings.lifecycleModel).toBe('flat');
         expect(result.settings.boundEnforcement.maxCallbackIterations)
             .toBe('inactive-with-cyclic-model');

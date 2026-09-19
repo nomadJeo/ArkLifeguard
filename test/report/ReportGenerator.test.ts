@@ -22,6 +22,11 @@ const result: ProjectAnalysisResult = {
         runNullness: true,
         runResourceAnalysis: true,
         lifecycleModel: 'flat',
+        lifecycleOptimizations: {
+            compactDispatcher: true,
+            removeEmptyScopes: true,
+            pruneUnreachableAbilities: true,
+        },
         bounds: {
             maxCallbackIterations: 1,
             maxAbilitiesPerFlow: 3,
@@ -69,8 +74,14 @@ const result: ProjectAnalysisResult = {
     }],
     navigations: [{ source: 'EntryAbility', target: 'pages/Index', type: 'loadContent', method: 'onWindowStageCreate' }],
     dummyMain: {
-        methodSignature: 'DummyMain.main()', blocks: 4, statements: 9,
+        methodSignature: 'DummyMain.main()', blocks: 4, edges: 5, statements: 9,
         lifecycleCalls: 2, uiCallbackCalls: 1,
+    },
+    lifecycleStatistics: {
+        abilities: { collected: 1, reachable: 1, pruned: 0 },
+        pages: { owned: 1, unknown: 0 },
+        components: { owned: 1, reachable: 1, fallback: 0 },
+        callbacks: { bound: 1, fallback: 0 },
     },
     nullness: {
         enabled: true,
@@ -114,6 +125,15 @@ const result: ProjectAnalysisResult = {
             location: { filePath: '/project/Index.ets', relativePath: 'Index.ets', line: 24, col: 5 },
         }],
         analyzedMethods: 3,
+        amplification: {
+            reachedFacts: 10,
+            reachedStatements: 8,
+            processedEdges: null,
+            propagationAttempts: null,
+            ifdsTimeMs: null,
+            factsPerStatement: 1.25,
+            edgesPerStatement: null,
+        },
         methodLocal: {
             leaks: [],
             analyzedMethods: 8,

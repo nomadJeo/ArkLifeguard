@@ -98,6 +98,8 @@ describe('ArkLifeguard CLI', () => {
         expect(report.resourceAnalysis.statistics.scheduling)
             .toBe('two-tier-control-flow');
         expect(report.resourceAnalysis.statistics.processedEdges).toBeGreaterThan(0);
+        expect(report.resourceAnalysis.amplification.edgesPerStatement)
+            .toBeGreaterThan(0);
         expect(report).not.toHaveProperty('abilities');
         fs.rmSync(directory, { recursive: true, force: true });
         output.mockRestore();
@@ -126,6 +128,8 @@ describe('ArkLifeguard CLI', () => {
         const report = JSON.parse(fs.readFileSync(lifecyclePath, 'utf8'));
         expect(report.reportKind).toBe('lifecycle-modeling-details');
         expect(report.dummyMain.methodSignature).toContain('@extendedDummyMain');
+        expect(report.dummyMain.edges).toBeGreaterThan(0);
+        expect(report.lifecycleStatistics.abilities.collected).toBeGreaterThan(0);
         expect(report).not.toHaveProperty('resourceAnalysis');
         fs.rmSync(directory, { recursive: true, force: true });
         output.mockRestore();

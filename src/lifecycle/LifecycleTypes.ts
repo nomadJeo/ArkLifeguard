@@ -350,6 +350,43 @@ export interface LifecycleModelConfig {
 
   /** 有界约束配置 */
   bounds: BoundsConfig;
+
+  /** RQ1.5 中可独立关闭的通用生命周期 CFG 优化。 */
+  optimizations: LifecycleOptimizationConfig;
+}
+
+/** M1/M0-OptFlat 共用的 CFG 优化；这些开关不改变事件集合。 */
+export interface LifecycleOptimizationConfig {
+  /** 用一个 scope head 直接分派到各回调，避免链式条件分派。 */
+  compactDispatcher: boolean;
+
+  /** 不为没有可调用生命周期/事件方法的 scope 生成占位 CFG。 */
+  removeEmptyScopes: boolean;
+
+  /** 仅保留入口 Ability 及静态可达的 startAbility 闭包。 */
+  pruneUnreachableAbilities: boolean;
+}
+
+/** RQ1.5 每个项目需要记录的 hierarchy 收集与裁剪统计。 */
+export interface LifecycleModelStatistics {
+  abilities: {
+    collected: number;
+    reachable: number;
+    pruned: number;
+  };
+  pages: {
+    owned: number;
+    unknown: number;
+  };
+  components: {
+    owned: number;
+    reachable: number;
+    fallback: number;
+  };
+  callbacks: {
+    bound: number;
+    fallback: number;
+  };
 }
 
 /**
@@ -385,6 +422,11 @@ export const DEFAULT_LIFECYCLE_CONFIG: LifecycleModelConfig = {
     FormExtensionLifecycleStage.UPDATE_FORM,
   ],
   maxNavigationDepth: 10,
+  optimizations: {
+    compactDispatcher: true,
+    removeEmptyScopes: true,
+    pruneUnreachableAbilities: true,
+  },
   bounds: {
     maxCallbackIterations: 1, // 默认：单次展开，DummyMain 为 DAG
     maxAbilitiesPerFlow: 0, // 默认关闭；资源 IFDS 可显式启用

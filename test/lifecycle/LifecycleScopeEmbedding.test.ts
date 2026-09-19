@@ -3,6 +3,7 @@ import 'arkanalyzer';
 import { AbilityCollector } from '../../src/lifecycle/AbilityCollector';
 import { LifecycleModelCreator } from '../../src/lifecycle/LifecycleModelCreator';
 import { HierarchicalLifecycleModelCreator } from '../../src/lifecycle/HierarchicalLifecycleModelCreator';
+import { OptimizedFlatLifecycleModelCreator } from '../../src/lifecycle/BackEdgeLifecycleModelCreator';
 import type { BasicBlock } from '../../src/adapter/arkanalyzer';
 import { buildLifecycleScene } from '../helpers/buildScene';
 
@@ -64,6 +65,37 @@ describe('lifecycle scope embedding', () => {
         expect(canReachWithout(entryForeground, secondTap, secondForeground)).toBe(false);
         expect(canReachWithout(secondForeground, secondTap, entryForeground)).toBe(true);
         expect(canReachWithout(secondForeground, entryTap, entryForeground)).toBe(false);
+    });
+
+    it('keeps callbacks in one global scope in M0-OptFlat', () => {
+        const creator = new OptimizedFlatLifecycleModelCreator(
+            buildLifecycleScene('ability-scope-nesting')
+        );
+        creator.create();
+        const blocks = [...creator.getDummyMain().getCfg()!.getBlocks()];
+        const findBlock = (text: string): BasicBlock => {
+            const block = blocks.find(candidate => candidate.getStmts()
+                .some(stmt => stmt.toString().includes(text)));
+            expect(block, `missing block containing ${text}`).toBeDefined();
+            return block!;
+        };
+        const canReach = (start: BasicBlock, target: BasicBlock): boolean => {
+            const pending = [start];
+            const visited = new Set<BasicBlock>();
+            while (pending.length > 0) {
+                const current = pending.pop()!;
+                if (current === target) return true;
+                if (visited.has(current)) continue;
+                visited.add(current);
+                pending.push(...current.getSuccessors());
+            }
+            return false;
+        };
+
+        expect(canReach(
+            findBlock('EntryAbility.onForeground'),
+            findBlock('SecondPage.handleSecondTap')
+        )).toBe(true);
     });
 
     it('embeds a loaded component before the next ability branch', () => {

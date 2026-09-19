@@ -121,7 +121,61 @@ describe('interchangeable lifecycle model entry', () => {
         expect(blocks.every(block => block.getStmts().length > 0)).toBe(true);
     });
 
-    it.each(['flat', 'hierarchical'] as const)(
+    it('provides an optimized flat baseline with the same Ability pruning as M1', () => {
+        const creators = ['opt-flat', 'hierarchical'] as const;
+        for (const mode of creators) {
+            const creator = createLifecycleModelCreator(
+                buildLifecycleScene('ability-scope-nesting'),
+                mode
+            );
+            creator.create();
+            expect(creator.getAbilities().map(ability => ability.name)).toEqual([
+                'EntryAbility',
+                'SecondAbility',
+            ]);
+            expect(creator.getLifecycleModelStatistics().abilities).toEqual({
+                collected: 3,
+                reachable: 2,
+                pruned: 1,
+            });
+        }
+    });
+
+    it('supports independent M1 optimization ablations', () => {
+        const create = (optimizations: {
+            compactDispatcher?: boolean;
+            removeEmptyScopes?: boolean;
+            pruneUnreachableAbilities?: boolean;
+        }, fixture = 'ability-scope-nesting') => {
+            const creator = createLifecycleModelCreator(
+                buildLifecycleScene(fixture),
+                'hierarchical',
+                { optimizations } as any
+            );
+            creator.create();
+            return creator;
+        };
+        const full = create({});
+        const noCompact = create({ compactDispatcher: false });
+        expect(noCompact.getDummyMain().getCfg()!.getBlocks().size)
+            .toBeGreaterThan(full.getDummyMain().getCfg()!.getBlocks().size);
+        expect([...noCompact.getDummyMain().getCfg()!.getBlocks()]
+            .flatMap(invokedNames).sort())
+            .toEqual([...full.getDummyMain().getCfg()!.getBlocks()]
+                .flatMap(invokedNames).sort());
+
+        const emptyFull = create({}, 'edge-cases');
+        const noEmpty = create({ removeEmptyScopes: false }, 'edge-cases');
+        expect(noEmpty.getDummyMain().getCfg()!.getBlocks().size)
+            .toBeGreaterThan(emptyFull.getDummyMain().getCfg()!.getBlocks().size);
+
+        const noPrune = create({ pruneUnreachableAbilities: false });
+        expect(noPrune.getAbilities().map(ability => ability.name))
+            .toContain('UnusedAbility');
+        expect(noPrune.getLifecycleModelStatistics().abilities.pruned).toBe(0);
+    });
+
+    it.each(['flat', 'opt-flat', 'hierarchical'] as const)(
         '%s ignores the bounded-unroll callback iteration parameter',
         mode => {
             const shapes = [1, 7].map(maxCallbackIterations => {

@@ -21,6 +21,7 @@ import {
     createLifecycleModelCreator,
     DEFAULT_LIFECYCLE_MODEL_MODE,
     LifecycleModelMode,
+    LifecycleModelStatistics,
 } from '../../lifecycle';
 import {
     AbilityLifecycleStage,
@@ -70,10 +71,20 @@ export interface NullnessLifecycleModelStatistics {
     components: number;
     blocks: number;
     edges: number;
+    hierarchy: LifecycleModelStatistics;
+    reachedStatements: number;
+    reachedFacts: number;
+    processedEdges: number | null;
+    propagationAttempts: number | null;
+    ifdsTimeMs: number | null;
+    factsPerStatement: number | null;
+    edgesPerStatement: number | null;
 }
 
 export interface NullnessSolverBreakdown {
     lifecycle?: Readonly<IFDSSolverStatistics>;
+    lifecycleReachedStatements: number;
+    lifecycleReachedFacts: number;
     supplemental?: Readonly<IFDSSolverStatistics>;
     supplementalRootCount: number;
 }
@@ -127,6 +138,11 @@ export class NullnessAnalysisRunner {
             const dummyMain = creator.getDummyMain();
             const result = this.runWithDummyMain(dummyMain);
             const blocks = [...dummyMain.getCfg()!.getBlocks()];
+            const lifecycleStatistics = result.solverBreakdown?.lifecycle;
+            const reachedStatements =
+                result.solverBreakdown?.lifecycleReachedStatements ?? 0;
+            const reachedFacts =
+                result.solverBreakdown?.lifecycleReachedFacts ?? 0;
             return {
                 ...result,
                 lifecycleModelStatistics: {
@@ -137,6 +153,20 @@ export class NullnessAnalysisRunner {
                         (sum, block) => sum + block.getSuccessors().length,
                         0
                     ),
+                    hierarchy: creator.getLifecycleModelStatistics(),
+                    reachedStatements,
+                    reachedFacts,
+                    processedEdges: lifecycleStatistics?.processedEdges ?? null,
+                    propagationAttempts:
+                        lifecycleStatistics?.propagationAttempts ?? null,
+                    ifdsTimeMs: lifecycleStatistics?.solveTimeMs ?? null,
+                    factsPerStatement: reachedStatements === 0
+                        ? null
+                        : reachedFacts / reachedStatements,
+                    edgesPerStatement: reachedStatements === 0 ||
+                        !lifecycleStatistics
+                        ? null
+                        : lifecycleStatistics.processedEdges / reachedStatements,
                 },
             };
         } catch (error) {
@@ -194,6 +224,11 @@ export class NullnessAnalysisRunner {
             let supplementalRootCount = 0;
             const diagnostics = [...problem.getNullDereferences()];
             const reachedFacts = solver.getReachedFacts();
+            const lifecycleReachedStatements = reachedFacts.size;
+            const lifecycleReachedFacts = [...reachedFacts.values()].reduce(
+                (sum, facts) => sum + facts.length,
+                0
+            );
             for (const method of supplementalRoots) {
                 const supplementalCfg = method.getCfg();
                 const supplementalEntry = supplementalCfg?.getStartingStmt() ??
@@ -237,6 +272,8 @@ export class NullnessAnalysisRunner {
                 ]),
                 solverBreakdown: {
                     lifecycle: mainStatistics,
+                    lifecycleReachedStatements,
+                    lifecycleReachedFacts,
                     supplemental: this.aggregateSolverStatistics(
                         supplementalStatistics
                     ),

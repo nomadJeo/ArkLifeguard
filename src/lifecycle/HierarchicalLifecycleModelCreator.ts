@@ -23,7 +23,6 @@ import {
   AbilityLifecycleStage,
   ComponentInfo,
   ComponentLifecycleStage,
-  NavigationType,
   UICallbackInfo,
 } from "./LifecycleTypes";
 
@@ -81,14 +80,16 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
       );
       let scopeEntry = abilityHead;
       if (foreground) {
-        scopeEntry = this.addMethodDispatch(
+        scopeEntry = this.addScopeEntryDispatch(
           cfg,
           abilityHead,
           [[this.getOrCreateClassInstance(ability.arkClass), foreground]],
-        )!;
+        );
       }
 
-      if (components.length > 0) {
+      if (components.length > 0 &&
+        (!this.config.optimizations.removeEmptyScopes ||
+          this.hasPageScopeWork(components))) {
         const pageHead = this.buildPageScope(cfg, scopeEntry, components);
         this.linkBlocks(pageHead, abilityHead);
       } else if (scopeEntry !== abilityHead) {
@@ -140,14 +141,17 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     components: readonly ComponentInfo[],
   ): BasicBlock {
     const pageHead = this.createDispatchHead(cfg, predecessor);
-    const visibleEntry = this.addMethodDispatch(
+    const pageShowInvocations = this.componentStageInvocations(
+      components,
+      ComponentLifecycleStage.PAGE_SHOW,
+    );
+    const visibleEntry = pageShowInvocations.length > 0
+      ? this.addScopeEntryDispatch(
       cfg,
       pageHead,
-      this.componentStageInvocations(
-        components,
-        ComponentLifecycleStage.PAGE_SHOW,
-      ),
-    ) ?? pageHead;
+      pageShowInvocations,
+    )
+      : pageHead;
     const eventHead = this.buildVisibleEventScope(
       cfg,
       visibleEntry,
@@ -197,72 +201,25 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     predecessor: BasicBlock,
     components: readonly ComponentInfo[],
   ): BasicBlock {
+    const callbacks = this.config.enableFineGrainedUICallbacks
+      ? components.flatMap(component =>
+        component.uiCallbacks.map(callback => ({ component, callback }))
+      )
+      : [];
+    if (callbacks.length === 0 &&
+      this.config.optimizations.removeEmptyScopes) {
+      return predecessor;
+    }
     const eventHead = this.createDispatchHead(cfg, predecessor);
-    if (!this.config.enableFineGrainedUICallbacks) return eventHead;
-
-    for (const component of components) {
-      const instance = this.getOrCreateClassInstance(component.arkClass);
-      for (const callback of component.uiCallbacks) {
-        const callbackBlock = this.addCallbackDispatch(
-          cfg,
-          eventHead,
-          instance,
-          callback,
-        );
-        this.linkBlocks(callbackBlock, eventHead);
-      }
+    for (const { component, callback } of callbacks) {
+      this.addReturningCallbackDispatch(
+        cfg,
+        eventHead,
+        this.getOrCreateClassInstance(component.arkClass),
+        callback,
+      );
     }
     return eventHead;
-  }
-
-  /**
-   * Keep configured entry Abilities and their statically resolved startAbility
-   * closure. An unresolved startAbility target disables pruning for soundness.
-   */
-  private retainReachableModelElements(): void {
-    const allAbilities = this.abilities;
-    const entries = allAbilities.filter(ability => ability.isEntry);
-    if (entries.length === 0) return;
-
-    const byName = new Map(
-      allAbilities.map(ability => [ability.name.toLowerCase(), ability]),
-    );
-    const reachable = new Set<AbilityInfo>();
-    const pending = [...entries];
-    while (pending.length > 0) {
-      const ability = pending.pop()!;
-      if (reachable.has(ability)) continue;
-      reachable.add(ability);
-      if (ability.hasUnresolvedAbilityNavigation) return;
-      for (const target of ability.navigationTargets) {
-        if (target.navigationType !== NavigationType.START_ABILITY) continue;
-        const targetName = target.targetAbilityName
-          .split(/[/.]/)
-          .filter(Boolean)
-          .at(-1)
-          ?.toLowerCase();
-        const targetAbility = targetName ? byName.get(targetName) : undefined;
-        if (targetAbility && !reachable.has(targetAbility)) {
-          pending.push(targetAbility);
-        }
-      }
-    }
-
-    const allOwned = new Set(
-      allAbilities.flatMap(ability =>
-        ability.components.map(component => component.signature.toString())
-      ),
-    );
-    const reachableOwned = new Set(
-      [...reachable].flatMap(ability =>
-        ability.components.map(component => component.signature.toString())
-      ),
-    );
-    this.abilities = allAbilities.filter(ability => reachable.has(ability));
-    this.components = this.components.filter(component => {
-      const signature = component.signature.toString();
-      return !allOwned.has(signature) || reachableOwned.has(signature);
-    });
   }
 
   private addClassInstances(entryBlock: BasicBlock): void {
@@ -370,40 +327,65 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
     dispatcher: BasicBlock,
     invocations: Array<[Local, ArkMethod]>,
   ): void {
-    const invocationBlock = this.addMethodDispatch(
-      cfg,
-      dispatcher,
-      invocations,
-    );
-    if (invocationBlock) this.linkBlocks(invocationBlock, dispatcher);
+    if (invocations.length === 0) return;
+    if (this.config.optimizations.compactDispatcher) {
+      const invocationBlock = this.createInvocationBlock(cfg, invocations);
+      this.linkBlocks(dispatcher, invocationBlock);
+      this.linkBlocks(invocationBlock, dispatcher);
+      return;
+    }
+    const condition = this.createDispatchHead(cfg, dispatcher);
+    const invocationBlock = this.createInvocationBlock(cfg, invocations);
+    this.linkBlocks(condition, invocationBlock);
+    this.linkBlocks(condition, dispatcher);
+    this.linkBlocks(invocationBlock, dispatcher);
   }
 
-  private addMethodDispatch(
+  private addScopeEntryDispatch(
     cfg: Cfg,
     dispatcher: BasicBlock,
     invocations: Array<[Local, ArkMethod]>,
-  ): BasicBlock | undefined {
-    if (invocations.length === 0) return undefined;
+  ): BasicBlock {
+    const invokeBlock = this.createInvocationBlock(cfg, invocations);
+    if (this.config.optimizations.compactDispatcher) {
+      this.linkBlocks(dispatcher, invokeBlock);
+      return invokeBlock;
+    }
+    const condition = this.createDispatchHead(cfg, dispatcher);
+    this.linkBlocks(condition, invokeBlock);
+    this.linkBlocks(condition, dispatcher);
+    return invokeBlock;
+  }
+
+  private createInvocationBlock(
+    cfg: Cfg,
+    invocations: Array<[Local, ArkMethod]>,
+  ): BasicBlock {
     const invokeBlock = new BasicBlock();
     for (const [instance, method] of invocations) {
       this.addMethodInvocation(invokeBlock, instance, method);
     }
     cfg.addBlock(invokeBlock);
-    this.linkBlocks(dispatcher, invokeBlock);
     return invokeBlock;
   }
 
-  private addCallbackDispatch(
+  private addReturningCallbackDispatch(
     cfg: Cfg,
     dispatcher: BasicBlock,
     instance: Local,
     callback: UICallbackInfo,
-  ): BasicBlock {
+  ): void {
     const callbackBlock = new BasicBlock();
     this.addUICallbackInvocation(callbackBlock, instance, callback);
     cfg.addBlock(callbackBlock);
-    this.linkBlocks(dispatcher, callbackBlock);
-    return callbackBlock;
+    if (this.config.optimizations.compactDispatcher) {
+      this.linkBlocks(dispatcher, callbackBlock);
+    } else {
+      const condition = this.createDispatchHead(cfg, dispatcher);
+      this.linkBlocks(condition, callbackBlock);
+      this.linkBlocks(condition, dispatcher);
+    }
+    this.linkBlocks(callbackBlock, dispatcher);
   }
 
   private createDispatchHead(cfg: Cfg, predecessor: BasicBlock): BasicBlock {
@@ -432,6 +414,23 @@ export class HierarchicalLifecycleModelCreator extends LifecycleModelCreator {
       seen.add(signature);
       return true;
     });
+  }
+
+  private hasPageScopeWork(components: readonly ComponentInfo[]): boolean {
+    if (this.config.enableFineGrainedUICallbacks &&
+      components.some(component => component.uiCallbacks.length > 0)) {
+      return true;
+    }
+    const stages = [
+      ComponentLifecycleStage.PAGE_SHOW,
+      ComponentLifecycleStage.PAGE_HIDE,
+      ComponentLifecycleStage.ABOUT_TO_RECYCLE,
+      ComponentLifecycleStage.ABOUT_TO_REUSE,
+      ...COMPONENT_PAGE_SCOPE_STAGES,
+    ];
+    return components.some(component =>
+      stages.some(stage => component.lifecycleMethods.has(stage))
+    );
   }
 
   private linkBlocks(from: BasicBlock, to: BasicBlock): void {

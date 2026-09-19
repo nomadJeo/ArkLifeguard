@@ -14,6 +14,7 @@ import {
     DEFAULT_LIFECYCLE_CONFIG,
     DEFAULT_LIFECYCLE_MODEL_MODE,
     LifecycleModelCreator,
+    LifecycleModelStatistics,
     LifecycleModelMode,
     NavigationAnalyzer,
 } from '../lifecycle';
@@ -37,6 +38,9 @@ export interface ProjectAnalysisOptions {
     runNullness?: boolean;
     runResourceAnalysis?: boolean;
     lifecycleModel?: LifecycleModelMode;
+    compactLifecycleDispatcher?: boolean;
+    removeEmptyLifecycleScopes?: boolean;
+    pruneUnreachableAbilities?: boolean;
     maxCallbackIterations?: number;
     maxAbilitiesPerFlow?: number;
     maxNavigationHops?: number;
@@ -117,6 +121,11 @@ export interface ProjectAnalysisResult {
         runNullness: boolean;
         runResourceAnalysis: boolean;
         lifecycleModel: LifecycleModelMode;
+        lifecycleOptimizations: {
+            compactDispatcher: boolean;
+            removeEmptyScopes: boolean;
+            pruneUnreachableAbilities: boolean;
+        };
         bounds: {
             maxCallbackIterations: number;
             maxAbilitiesPerFlow: number;
@@ -156,6 +165,7 @@ export interface ProjectAnalysisResult {
     components: ComponentRecord[];
     navigations: NavigationRecord[];
     dummyMain: DummyMainRecord;
+    lifecycleStatistics: LifecycleModelStatistics;
     nullness: {
         enabled: boolean;
         success: boolean;
@@ -177,6 +187,7 @@ export interface ProjectAnalysisResult {
         sinks: SourceSinkLocationRecord[];
         analyzedMethods: number;
         solverStatistics?: Readonly<IFDSSolverStatistics>;
+        amplification: LifecycleAmplificationRecord;
         methodLocal: {
             leaks: MethodLocalResourceLeakRecord[];
             analyzedMethods: number;
@@ -228,9 +239,20 @@ export interface NavigationRecord {
 export interface DummyMainRecord {
     methodSignature: string;
     blocks: number;
+    edges: number;
     statements: number;
     lifecycleCalls: number;
     uiCallbackCalls: number;
+}
+
+export interface LifecycleAmplificationRecord {
+    reachedFacts: number;
+    reachedStatements: number;
+    processedEdges: number | null;
+    propagationAttempts: number | null;
+    ifdsTimeMs: number | null;
+    factsPerStatement: number | null;
+    edgesPerStatement: number | null;
 }
 
 const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPaths'>> = {
@@ -240,6 +262,9 @@ const DEFAULT_OPTIONS: Required<Omit<ProjectAnalysisOptions, 'sdkRoot' | 'sdkPat
     runNullness: true,
     runResourceAnalysis: true,
     lifecycleModel: DEFAULT_LIFECYCLE_MODEL_MODE,
+    compactLifecycleDispatcher: DEFAULT_LIFECYCLE_CONFIG.optimizations.compactDispatcher,
+    removeEmptyLifecycleScopes: DEFAULT_LIFECYCLE_CONFIG.optimizations.removeEmptyScopes,
+    pruneUnreachableAbilities: DEFAULT_LIFECYCLE_CONFIG.optimizations.pruneUnreachableAbilities,
     maxCallbackIterations: DEFAULT_LIFECYCLE_CONFIG.bounds.maxCallbackIterations,
     maxAbilitiesPerFlow: 0,
     maxNavigationHops: 0,
@@ -290,6 +315,11 @@ export class ProjectAnalyzer {
             const lifecycleCreator = createLifecycleModelCreator(scene, this.options.lifecycleModel, {
                 lifecycleOrder: NULLNESS_LIFECYCLE_ORDER,
                 enableViewTreeParsing: this.options.extractUICallbacks,
+                optimizations: {
+                    compactDispatcher: this.options.compactLifecycleDispatcher,
+                    removeEmptyScopes: this.options.removeEmptyLifecycleScopes,
+                    pruneUnreachableAbilities: this.options.pruneUnreachableAbilities,
+                },
                 ...boundedUnrollConfig,
             });
             lifecycleCreator.create();
@@ -429,6 +459,11 @@ export class ProjectAnalyzer {
                 runNullness: this.options.runNullness,
                 runResourceAnalysis: this.options.runResourceAnalysis,
                 lifecycleModel: this.options.lifecycleModel,
+                lifecycleOptimizations: {
+                    compactDispatcher: this.options.compactLifecycleDispatcher,
+                    removeEmptyScopes: this.options.removeEmptyLifecycleScopes,
+                    pruneUnreachableAbilities: this.options.pruneUnreachableAbilities,
+                },
                 bounds: {
                     maxCallbackIterations: this.options.maxCallbackIterations,
                     maxAbilitiesPerFlow: this.options.maxAbilitiesPerFlow,
@@ -475,6 +510,7 @@ export class ProjectAnalyzer {
             components: components.map(component => this.componentRecord(component)),
             navigations,
             dummyMain: this.dummyMainRecord(dummyMain, abilities, components),
+            lifecycleStatistics: creator.getLifecycleModelStatistics(),
             nullness: {
                 enabled: this.options.runNullness,
                 success: nullnessSuccess,
@@ -495,6 +531,11 @@ export class ProjectAnalyzer {
                 sources: sourceLocations,
                 sinks: sinkLocations,
                 analyzedMethods: resourceResult?.statistics.analyzedMethods ?? 0,
+                amplification: this.lifecycleAmplification(
+                    resourceReachedFacts,
+                    resourceReachedStatements,
+                    resourceResult?.statistics.solver,
+                ),
                 ...(resourceResult?.statistics.solver
                     ? { solverStatistics: resourceResult.statistics.solver }
                     : {}),
@@ -663,9 +704,33 @@ export class ProjectAnalyzer {
         return {
             methodSignature: dummyMain.getSignature().toString(),
             blocks: cfg.getBlocks().size,
+            edges: [...cfg.getBlocks()].reduce(
+                (sum, block) => sum + block.getSuccessors().length,
+                0,
+            ),
             statements,
             lifecycleCalls,
             uiCallbackCalls,
+        };
+    }
+
+    private lifecycleAmplification(
+        reachedFacts: number,
+        reachedStatements: number,
+        solver: Readonly<IFDSSolverStatistics> | undefined,
+    ): LifecycleAmplificationRecord {
+        return {
+            reachedFacts,
+            reachedStatements,
+            processedEdges: solver?.processedEdges ?? null,
+            propagationAttempts: solver?.propagationAttempts ?? null,
+            ifdsTimeMs: solver?.solveTimeMs ?? null,
+            factsPerStatement: reachedStatements === 0
+                ? null
+                : reachedFacts / reachedStatements,
+            edgesPerStatement: reachedStatements === 0 || !solver
+                ? null
+                : solver.processedEdges / reachedStatements,
         };
     }
 

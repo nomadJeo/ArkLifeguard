@@ -95,8 +95,10 @@ import {
   UICallbackInfo,
   UIEventType,
   LifecycleModelConfig,
+  LifecycleModelStatistics,
   DEFAULT_LIFECYCLE_CONFIG,
   BoundsConfig,
+  NavigationType,
 } from "./LifecycleTypes";
 
 // ============================================================================
@@ -146,6 +148,18 @@ export class LifecycleModelCreator {
   /** 类实例 Local 映射：类签名 -> Local 变量 */
   protected classInstanceMap: Map<string, Local> = new Map();
 
+  /** Collected/effective hierarchy counts used by RQ1.5 reports. */
+  private lifecycleModelStatistics: LifecycleModelStatistics = {
+    abilities: { collected: 0, reachable: 0, pruned: 0 },
+    pages: { owned: 0, unknown: 0 },
+    components: { owned: 0, reachable: 0, fallback: 0 },
+    callbacks: { bound: 0, fallback: 0 },
+  };
+
+  private collectedAbilitiesCount = 0;
+  private collectedComponents: ComponentInfo[] = [];
+  private collectedOwnedComponentSignatures = new Set<string>();
+
   // ========================================================================
   // 构造函数
   // ========================================================================
@@ -166,6 +180,10 @@ export class LifecycleModelCreator {
         ...DEFAULT_LIFECYCLE_CONFIG.bounds,
         ...(config?.bounds ?? {}),
       } as BoundsConfig,
+      optimizations: {
+        ...DEFAULT_LIFECYCLE_CONFIG.optimizations,
+        ...(config?.optimizations ?? {}),
+      },
     };
 
     // 初始化收集器
@@ -234,6 +252,16 @@ export class LifecycleModelCreator {
     return this.config.bounds;
   }
 
+  /** Return a defensive copy of hierarchy statistics for reports. */
+  public getLifecycleModelStatistics(): LifecycleModelStatistics {
+    return {
+      abilities: { ...this.lifecycleModelStatistics.abilities },
+      pages: { ...this.lifecycleModelStatistics.pages },
+      components: { ...this.lifecycleModelStatistics.components },
+      callbacks: { ...this.lifecycleModelStatistics.callbacks },
+    };
+  }
+
   /**
    * 获取"方法 → 所属 Ability 类名"映射
    *
@@ -274,6 +302,14 @@ export class LifecycleModelCreator {
     // 阶段四：@Entry Component 优先 - loadContent 通常加载入口页，入口组件先执行更符合实际流程
     this.components.sort((a, b) => (b.isEntry ? 1 : 0) - (a.isEntry ? 1 : 0)); // @Entry 排前面
     console.log(`  Found ${this.components.length} Components (@Entry first)`);
+    this.collectedAbilitiesCount = this.abilities.length;
+    this.collectedComponents = [...this.components];
+    this.collectedOwnedComponentSignatures = new Set(
+      this.abilities.flatMap(ability =>
+        ability.components.map(component => component.signature.toString())
+      ),
+    );
+    this.refreshLifecycleModelStatistics();
   }
 
   // ========================================================================
@@ -295,6 +331,120 @@ export class LifecycleModelCreator {
       totalCallbacks += component.uiCallbacks.length;
     }
     console.log(`  Extracted ${totalCallbacks} UI callbacks`);
+    this.refreshLifecycleModelStatistics();
+  }
+
+  /**
+   * Apply the M0-OptFlat/M1 Ability reachability optimization. An unresolved
+   * startAbility target conservatively retains every collected Ability.
+   */
+  protected retainReachableModelElements(): void {
+    const allAbilities = this.abilities;
+    if (!this.config.optimizations.pruneUnreachableAbilities) {
+      this.refreshLifecycleModelStatistics();
+      return;
+    }
+    const entries = allAbilities.filter(ability => ability.isEntry);
+    if (entries.length === 0) {
+      this.refreshLifecycleModelStatistics();
+      return;
+    }
+
+    const byName = new Map(
+      allAbilities.map(ability => [ability.name.toLowerCase(), ability]),
+    );
+    const reachable = new Set<AbilityInfo>();
+    const pending = [...entries];
+    while (pending.length > 0) {
+      const ability = pending.pop()!;
+      if (reachable.has(ability)) continue;
+      reachable.add(ability);
+      if (ability.hasUnresolvedAbilityNavigation) {
+        this.refreshLifecycleModelStatistics();
+        return;
+      }
+      for (const target of ability.navigationTargets) {
+        if (target.navigationType !== NavigationType.START_ABILITY) continue;
+        const targetName = target.targetAbilityName
+          .split(/[/.]/)
+          .filter(Boolean)
+          .at(-1)
+          ?.toLowerCase();
+        const targetAbility = targetName ? byName.get(targetName) : undefined;
+        if (targetAbility && !reachable.has(targetAbility)) {
+          pending.push(targetAbility);
+        }
+      }
+    }
+
+    const allOwned = new Set(
+      allAbilities.flatMap(ability =>
+        ability.components.map(component => component.signature.toString())
+      ),
+    );
+    const reachableOwned = new Set(
+      [...reachable].flatMap(ability =>
+        ability.components.map(component => component.signature.toString())
+      ),
+    );
+    this.abilities = allAbilities.filter(ability => reachable.has(ability));
+    this.components = this.components.filter(component => {
+      const signature = component.signature.toString();
+      return !allOwned.has(signature) || reachableOwned.has(signature);
+    });
+    this.refreshLifecycleModelStatistics();
+  }
+
+  private refreshLifecycleModelStatistics(): void {
+    const collectedComponents = new Map(
+      this.collectedComponents.map(component => [
+        component.signature.toString(),
+        component,
+      ]),
+    );
+    const reachableComponents = new Map(
+      this.components.map(component => [component.signature.toString(), component]),
+    );
+    const ownedComponents = [...collectedComponents.entries()]
+      .filter(([signature]) =>
+        this.collectedOwnedComponentSignatures.has(signature)
+      )
+      .map(([, component]) => component);
+    const fallbackComponents = [...collectedComponents.entries()]
+      .filter(([signature]) =>
+        !this.collectedOwnedComponentSignatures.has(signature)
+      )
+      .map(([, component]) => component);
+    this.lifecycleModelStatistics = {
+      abilities: {
+        collected: this.collectedAbilitiesCount,
+        reachable: this.abilities.length,
+        pruned: Math.max(
+          0,
+          this.collectedAbilitiesCount - this.abilities.length,
+        ),
+      },
+      // AbilityCollector currently represents loadContent pages as ComponentInfo.
+      pages: {
+        owned: ownedComponents.length,
+        unknown: fallbackComponents.length,
+      },
+      components: {
+        owned: ownedComponents.length,
+        reachable: reachableComponents.size,
+        fallback: fallbackComponents.length,
+      },
+      callbacks: {
+        bound: ownedComponents.reduce(
+          (sum, component) => sum + component.uiCallbacks.length,
+          0,
+        ),
+        fallback: fallbackComponents.reduce(
+          (sum, component) => sum + component.uiCallbacks.length,
+          0,
+        ),
+      },
+    };
   }
 
   // ========================================================================

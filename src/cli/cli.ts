@@ -33,6 +33,9 @@ interface AnalyzeCliOptions {
     uiCallbacks: boolean;
     checks: AnalysisCheck[];
     lifecycleModel: LifecycleModelMode;
+    compactLifecycleDispatcher: boolean;
+    removeEmptyLifecycleScopes: boolean;
+    pruneUnreachableAbilities: boolean;
     maxCallbackIterations: number;
     maxAbilitiesPerFlow: number;
     maxNavigationHops: number;
@@ -71,7 +74,10 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
             'checks to run: all, nullness, resource, or a comma-separated list'
         ).argParser(parseChecks).default(['nullness', 'resource'] as AnalysisCheck[], 'all'))
         .addOption(new Option('--lifecycle-model <mode>', 'DummyMain lifecycle model')
-            .choices(['flat', 'back-edge', 'hierarchical', 'bounded-unroll']).default('flat'))
+            .choices(['flat', 'opt-flat', 'back-edge', 'hierarchical', 'bounded-unroll']).default('flat'))
+        .option('--no-compact-lifecycle-dispatcher', 'disable compact lifecycle dispatch (RQ1.5 ablation)')
+        .option('--no-remove-empty-lifecycle-scopes', 'retain empty lifecycle scope scaffolding (RQ1.5 ablation)')
+        .option('--no-prune-unreachable-abilities', 'retain unreachable Abilities (RQ1.5 ablation)')
         .option('--max-callback-iterations <n>', 'bounded lifecycle expansion rounds', positiveInteger, 1)
         .option('--max-abilities-per-flow <n>', 'optional Ability flow bound; 0 disables it', nonNegativeInteger, 0)
         .option('--max-navigation-hops <n>', 'optional navigation hop bound; 0 disables it', nonNegativeInteger, 0)
@@ -96,6 +102,9 @@ export async function runCLI(argv: string[] = process.argv): Promise<number> {
                     runNullness,
                     runResourceAnalysis,
                     lifecycleModel: options.lifecycleModel,
+                    compactLifecycleDispatcher: options.compactLifecycleDispatcher,
+                    removeEmptyLifecycleScopes: options.removeEmptyLifecycleScopes,
+                    pruneUnreachableAbilities: options.pruneUnreachableAbilities,
                     maxCallbackIterations: options.maxCallbackIterations,
                     maxAbilitiesPerFlow: options.maxAbilitiesPerFlow,
                     maxNavigationHops: options.maxNavigationHops,

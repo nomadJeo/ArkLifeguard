@@ -324,5 +324,176 @@ export class FlatLifecycleModelCreator extends LifecycleModelCreator {
   }
 }
 
+/**
+ * RQ1.5 M0-OptFlat baseline.
+ *
+ * It shares M1's test filtering, Ability pruning, compact dispatcher and
+ * omission of empty invocation blocks. The deliberate difference is that all
+ * lifecycle/event callbacks return to one global dispatcher instead of an
+ * Ability-owned nested scope.
+ */
+export class OptimizedFlatLifecycleModelCreator extends LifecycleModelCreator {
+  protected override buildDummyMainCfg(): void {
+    this.retainReachableModelElements();
+
+    const cfg = new Cfg();
+    cfg.setDeclaringMethod(this.dummyMain);
+    const entryBlock = new BasicBlock();
+    cfg.addBlock(entryBlock);
+    this.addStaticInitialization(cfg, entryBlock);
+
+    const components = this.uniqueEffectiveComponents();
+    for (const ability of this.abilities) {
+      const instance = this.getOrCreateClassInstance(ability.arkClass);
+      this.addInstanceCreation(entryBlock, instance, ability.arkClass);
+      for (const stage of this.config.lifecycleOrder) {
+        if (!ABILITY_START_STAGES.has(stage)) continue;
+        const method = ability.lifecycleMethods.get(stage);
+        if (method) this.addMethodInvocation(entryBlock, instance, method);
+      }
+    }
+    for (const component of components) {
+      const instance = this.getOrCreateClassInstance(component.arkClass);
+      this.addInstanceCreation(entryBlock, instance, component.arkClass);
+      const appear = component.lifecycleMethods.get(
+        ComponentLifecycleStage.ABOUT_TO_APPEAR,
+      );
+      if (appear) this.addMethodInvocation(entryBlock, instance, appear);
+    }
+
+    const dispatcher = this.createGlobalDispatcher(cfg, entryBlock);
+    for (const ability of this.abilities) {
+      const instance = this.getOrCreateClassInstance(ability.arkClass);
+      const emitted = new Set<string>();
+      for (const stage of this.config.lifecycleOrder) {
+        if (ABILITY_START_STAGES.has(stage) || ABILITY_END_STAGES.has(stage)) {
+          continue;
+        }
+        const method = ability.lifecycleMethods.get(stage);
+        const signature = method?.getSignature().toString();
+        if (!method || !signature || emitted.has(signature)) continue;
+        emitted.add(signature);
+        this.addGlobalInvocation(cfg, dispatcher, [[instance, method]]);
+      }
+    }
+
+    for (const component of components) {
+      const instance = this.getOrCreateClassInstance(component.arkClass);
+      for (const stage of COMPONENT_LOOP_STAGES) {
+        const method = component.lifecycleMethods.get(stage);
+        if (method) this.addGlobalInvocation(cfg, dispatcher, [[instance, method]]);
+      }
+      const reusePair: Array<[Local, ArkMethod]> = [];
+      const recycle = component.lifecycleMethods.get(
+        ComponentLifecycleStage.ABOUT_TO_RECYCLE,
+      );
+      const reuse = component.lifecycleMethods.get(
+        ComponentLifecycleStage.ABOUT_TO_REUSE,
+      );
+      if (recycle) reusePair.push([instance, recycle]);
+      if (reuse) reusePair.push([instance, reuse]);
+      this.addGlobalInvocation(cfg, dispatcher, reusePair);
+
+      if (this.config.enableFineGrainedUICallbacks) {
+        for (const callback of component.uiCallbacks) {
+          const callbackBlock = new BasicBlock();
+          this.addUICallbackInvocation(callbackBlock, instance, callback);
+          cfg.addBlock(callbackBlock);
+          this.linkGlobal(cfg, dispatcher, callbackBlock);
+        }
+      }
+    }
+
+    const returnBlock = new BasicBlock();
+    for (const component of components) {
+      const method = component.lifecycleMethods.get(
+        ComponentLifecycleStage.ABOUT_TO_DISAPPEAR,
+      );
+      if (method) {
+        this.addMethodInvocation(
+          returnBlock,
+          this.getOrCreateClassInstance(component.arkClass),
+          method,
+        );
+      }
+    }
+    for (const ability of this.abilities) {
+      const instance = this.getOrCreateClassInstance(ability.arkClass);
+      for (const stage of this.config.lifecycleOrder) {
+        if (!ABILITY_END_STAGES.has(stage)) continue;
+        const method = ability.lifecycleMethods.get(stage);
+        if (method) this.addMethodInvocation(returnBlock, instance, method);
+      }
+    }
+    returnBlock.addStmt(new ArkReturnVoidStmt());
+    cfg.addBlock(returnBlock);
+    this.linkBlocks(dispatcher, returnBlock);
+
+    this.dummyMain.setBody(
+      new ArkBody(new Set(this.classInstanceMap.values()), cfg),
+    );
+    this.linkStmtsToCfg(cfg);
+  }
+
+  private addGlobalInvocation(
+    cfg: Cfg,
+    dispatcher: BasicBlock,
+    invocations: Array<[Local, ArkMethod]>,
+  ): void {
+    if (invocations.length === 0) return;
+    const block = new BasicBlock();
+    for (const [instance, method] of invocations) {
+      this.addMethodInvocation(block, instance, method);
+    }
+    cfg.addBlock(block);
+    this.linkGlobal(cfg, dispatcher, block);
+  }
+
+  private linkGlobal(
+    cfg: Cfg,
+    dispatcher: BasicBlock,
+    invocation: BasicBlock,
+  ): void {
+    if (this.config.optimizations.compactDispatcher) {
+      this.linkBlocks(dispatcher, invocation);
+    } else {
+      const condition = this.createGlobalDispatcher(cfg, dispatcher);
+      this.linkBlocks(condition, invocation);
+      this.linkBlocks(condition, dispatcher);
+    }
+    this.linkBlocks(invocation, dispatcher);
+  }
+
+  private createGlobalDispatcher(
+    cfg: Cfg,
+    predecessor: BasicBlock,
+  ): BasicBlock {
+    const block = new BasicBlock();
+    block.addStmt(new ArkIfStmt(new ArkConditionExpr(
+      ValueUtil.getBooleanConstant(true),
+      ValueUtil.getBooleanConstant(false),
+      RelationalBinaryOperator.InEquality,
+    )));
+    cfg.addBlock(block);
+    this.linkBlocks(predecessor, block);
+    return block;
+  }
+
+  private uniqueEffectiveComponents(): ComponentInfo[] {
+    const seen = new Set<string>();
+    return this.components.filter(component => {
+      const signature = component.signature.toString();
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    });
+  }
+
+  private linkBlocks(from: BasicBlock, to: BasicBlock): void {
+    from.addSuccessorBlock(to);
+    to.addPredecessorBlock(from);
+  }
+}
+
 /** @deprecated Use FlatLifecycleModelCreator; retained for source compatibility. */
 export { FlatLifecycleModelCreator as BackEdgeLifecycleModelCreator };

@@ -51,5 +51,16 @@ describe('Nullness late null guard', () => {
             (result.solverBreakdown?.lifecycle?.solveTimeMs ?? 0) +
             (result.solverBreakdown?.supplemental?.solveTimeMs ?? 0)
         );
+        expect(result.lifecycleModelStatistics?.reachedStatements).toBe(
+            result.solverBreakdown?.lifecycleReachedStatements
+        );
+        expect(result.lifecycleModelStatistics?.reachedFacts).toBe(
+            result.solverBreakdown?.lifecycleReachedFacts
+        );
+        expect(result.lifecycleModelStatistics?.processedEdges).toBe(
+            result.solverBreakdown?.lifecycle?.processedEdges
+        );
+        expect(result.lifecycleModelStatistics?.factsPerStatement)
+            .toBeGreaterThanOrEqual(0);
     });
 });
